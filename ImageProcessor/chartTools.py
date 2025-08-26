@@ -907,25 +907,26 @@ class ChartTools:
         """
         selected_item = main_window.ui.imagesListWidget.currentItem()
         if not selected_item:
-            return None, None
+            return None, None, None
             
         selected_meta = selected_item.data(Qt.UserRole)
-        
+
+        group_name = selected_meta.get('group_name', 'All Images')
+
         # Skip group headers
         if selected_meta.get('is_group_header', False):
-            return None, None
-            
+            return None, None, None
+
         # First check if this specific image has a chart assigned in userData
         if selected_meta.get('chart', False):
-            return selected_meta['input_path'], 'image'
+            return selected_meta['input_path'], 'image', group_name
             
         # If not, check if the group has a chart assigned
-        group_name = selected_meta.get('group_name', 'All Images')
         for chart_path, chart_group in main_window.chart_groups:
             if chart_group == group_name:
-                return chart_path, 'group'
+                return chart_path, 'group', group_name
                 
-        return None, None
+        return None, None, None
     
     @staticmethod 
     def copy_chart_assignment(main_window):
@@ -935,10 +936,10 @@ class ChartTools:
         Args:
             main_window: Reference to the main application window
         """
-        chart_path, source_type = ChartTools.get_current_chart_assignment(main_window)
+        chart_path, source_type, group_name = ChartTools.get_current_chart_assignment(main_window)
         
         if chart_path:
-            main_window.copied_chart_assignment = chart_path
+            main_window.copied_chart_assignment = [chart_path, group_name]
             source_desc = "image" if source_type == 'image' else "group"
             main_window.log(f"[Copy Chart] Copied chart assignment from {source_desc}: {os.path.basename(chart_path)}")
         else:
@@ -969,7 +970,7 @@ class ChartTools:
             main_window.log("[Paste Chart] Cannot paste chart to group header")
             return
             
-        chart_path = main_window.copied_chart_assignment
+        chart_path, group_name = main_window.copied_chart_assignment
         selected_group = selected_meta.get('group_name', 'All Images')
         
         # Remove any existing chart assignment for this group
@@ -1000,7 +1001,13 @@ class ChartTools:
             # Remove from chart_groups list
             main_window.chart_groups = [[c, g] for c, g in main_window.chart_groups if not (c == existing_chart and g == selected_group)]
 
-        # Add the copied chart to this group
+        selected_meta['chart'] = True
+        selected_item.setData(Qt.UserRole, selected_meta)
+        selected_item.setBackground(QColor('#ADD8E6'))
+
+        group_data = main_window.group_calibrations[group_name]
+        main_window.group_calibrations[selected_group] = group_data
+
         main_window.chart_groups.append([chart_path, selected_group])
         
         # Update UI to show group context

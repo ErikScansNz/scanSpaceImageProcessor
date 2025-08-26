@@ -911,7 +911,9 @@ class ImageCorrectionWorker(QRunnable):
                     del buf_out
 
                 # 10. Send preview and completion signals
-                data = [corrected_uint8, out_path]
+                # Create 2000px max resolution proxy for UI preview to avoid massive memory transfers
+                # preview_proxy = self._create_preview_proxy(corrected_uint8)
+                data = [out_path]
                 self.signals.preview.emit(data)
                 del data
 
@@ -954,6 +956,34 @@ class ImageCorrectionWorker(QRunnable):
             except:
                 pass
             gc.collect()
+
+    def _create_preview_proxy(self, corrected_uint8: np.ndarray, max_size: int = 2000) -> np.ndarray:
+        """
+        Create a downsized proxy image for UI preview to reduce memory transfer.
+        
+        Args:
+            corrected_uint8: Full resolution uint8 image array
+            max_size: Maximum dimension (width or height) for proxy
+            
+        Returns:
+            np.ndarray: Downsized proxy image array
+        """
+        h, w = corrected_uint8.shape[:2]
+        
+        # Calculate scale factor to keep max dimension under max_size
+        scale = min(max_size / w, max_size / h)
+        
+        # Only downsize if image is larger than max_size
+        if scale < 1.0:
+            new_w = int(w * scale)
+            new_h = int(h * scale)
+            
+            # Use OpenCV for high-quality resizing
+            proxy = cv2.resize(corrected_uint8, (new_w, new_h), interpolation=cv2.INTER_AREA)
+            return proxy
+        else:
+            # Image is already small enough, return copy to avoid modifying original
+            return corrected_uint8.copy()
 
     def _apply_masking(self, corrected: np.ndarray) -> np.ndarray:
         """

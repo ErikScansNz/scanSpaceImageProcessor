@@ -2722,12 +2722,8 @@ class MainWindow(QMainWindow):
         Called whenever an image finishes processing
         Does not show images from networked processing clients
         """
-        # Handle array or path
-        if isinstance(data, (list, tuple)) and len(data) == 2:
-            image_data, image_path = data
-        else:
-            image_data = data
-            image_path = None
+
+        image_path = data
 
         if image_path is not None:
             for i in range(self.ui.imagesListWidget.count()):
@@ -2742,50 +2738,7 @@ class MainWindow(QMainWindow):
                     self.ui.imagesListWidget.setCurrentRow(i)
                     break
 
-        if isinstance(image_data, np.ndarray):
-            # Wrap numpy array (H×W×3 uint8) directly into QImage
-            h, w, c = image_data.shape
-            bytes_per_line = c * w
-            try:
-                img = QImage(image_data.data, w, h, bytes_per_line, QImage.Format_RGB888)
-                if img.isNull():
-                    self.log_error("[Preview Error] QImage from array is null")
-                    return
-                pix = QPixmap.fromImage(img)
-                if pix.isNull():
-                    self.log_error("[Preview Error] QPixmap.fromImage is null")
-                    return
-                self._display_preview(pix)
-            except Exception as e:
-                self.log_error(f"[Preview Error] QImage creation failed: {e}")
-        else:
-            self.show_preview(image_path)
-
-    def show_preview(self, image_path):
-        """
-        Called when when an image is selected and a thumbnail or image object in memory does not exist for the image
-        Loads image from disk using its path
-        """
-        path = os.path.normpath(image_path)
-        # self.log_error(f"[Preview] Loading processed image: {path}")
-        exists = os.path.exists(path)
-
-        try:
-            pil_image = Image.open(image_path).convert("RGBA")
-            data = pil_image.tobytes("raw", "RGBA")
-            width, height = pil_image.size
-
-            img = QImage(data, width, height, QImage.Format_RGBA8888)
-        except Exception as e:
-            self.log_error(f"PIL fallback failed: {e}")
-            return
-
-        pixmap = QPixmap.fromImage(img)
-        if pixmap.isNull():
-            self.log_error("QPixmap conversion failed after fallback")
-            return
-
-        self._display_preview(pixmap)
+        self.preview_selected()
 
     def _display_preview(self, pixmap):
         """
@@ -3046,7 +2999,7 @@ class MainWindow(QMainWindow):
             self.log_error("[Manual Swatch] No image to process.")
             return
 
-        self.log_error(f"[Manual Swatch] Processing {len(self.flatten_swatch_rects)} swatches...")
+        self.log_debug(f"[Manual Swatch] Processing {len(self.flatten_swatch_rects)} swatches...")
         
         img_fp = self.cropped_fp
         swatch_colours = []
