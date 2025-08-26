@@ -376,7 +376,7 @@ class ImageProcessorSettingsDialog(QDialog):
     def browse_for_default_color_chart(self):
         """Browse for a .npy file containing default color chart swatch data."""
         file_dialog = QFileDialog()
-        folder_path, _ = file_dialog.getExistingDirectory(
+        folder_path = file_dialog.getExistingDirectory(
             self,
             "Select A directory that holds template colour chart calibration files"
         )
@@ -1323,6 +1323,7 @@ class MainWindow(QMainWindow):
         
         if checked:
             # Refresh the combo box with latest charts from folder
+            self.ui.precalcChartComboBox.setEnabled(True)
             settings = QSettings('ScanSpace', 'ImageProcessor')
             chart_folder_path = settings.value('chart_folder_path', '', type=str)
             self.populate_precalc_chart_combo(chart_folder_path)
