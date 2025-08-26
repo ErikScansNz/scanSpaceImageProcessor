@@ -520,34 +520,87 @@ def calculate_white_balance_multipliers(
     return tuple(multipliers)
 
 
+def calculate_direct_wb_multipliers(
+    target_temp: float,
+    tint: float = 0.0
+) -> Tuple[float, float, float]:
+    """
+    Calculate RGB multipliers for direct white balance adjustment.
+    
+    Uses simplified blackbody approximation to calculate multipliers
+    that adjust the image to the target color temperature.
+    
+    Args:
+        target_temp: Target color temperature in Kelvin (1000-12000)
+        tint: Green/Magenta tint adjustment (-100 to +100)
+    
+    Returns:
+        Tuple of (r_mult, g_mult, b_mult) multipliers
+    """
+    # Clamp temperature to reasonable range
+    target_temp = np.clip(target_temp, 1000, 12000)
+    
+    # Use simplified blackbody approximation for RGB multipliers
+    # Based on standard color temperature curves
+    
+    if target_temp >= 5500:
+        # Daylight and cooler (higher temperature)
+        # Need to reduce red and increase blue
+        r_mult = 1.0 - (target_temp - 5500) * 0.00005
+        g_mult = 1.0
+        b_mult = 1.0 + (target_temp - 5500) * 0.00008
+    else:
+        # Warmer than daylight (lower temperature) 
+        # Need to increase red and reduce blue
+        r_mult = 1.0 + (5500 - target_temp) * 0.00008
+        g_mult = 1.0
+        b_mult = 1.0 - (5500 - target_temp) * 0.00006
+    
+    # Apply tint adjustment (green/magenta)
+    if tint != 0:
+        tint_factor = 1 + (tint / 100.0) * 0.1
+        g_mult *= tint_factor
+    
+    # Ensure multipliers are positive and normalize
+    r_mult = max(0.1, r_mult)
+    g_mult = max(0.1, g_mult)
+    b_mult = max(0.1, b_mult)
+    
+    # Normalize so minimum multiplier is 1.0 (prevents overall darkening)
+    min_mult = min(r_mult, g_mult, b_mult)
+    if min_mult > 0:
+        r_mult /= min_mult
+        g_mult /= min_mult  
+        b_mult /= min_mult
+    
+    return r_mult, g_mult, b_mult
+
+
 def adjust_white_balance(
     image: np.ndarray,
-    current_temp: float,
     target_temp: float,
     tint: float = 0.0
 ) -> np.ndarray:
     """
-    Adjust the white balance of an image by color temperature.
+    Adjust the white balance of an image by applying color temperature correction.
     
-    Applies color temperature correction by calculating and applying
-    RGB channel multipliers based on blackbody radiation curves.
+    Applies direct color temperature correction by calculating RGB multipliers
+    based on blackbody radiation curves for the target temperature.
     
     Args:
         image: Input image array (float32, range 0-1)
-        current_temp: Current white balance in Kelvin (from EXIF or estimated)
         target_temp: Target white balance in Kelvin (1000-12000)
         tint: Optional green/magenta tint adjustment (-100 to +100)
     
     Returns:
         np.ndarray: White balance adjusted image
     """
-    if current_temp == target_temp and tint == 0:
+    if target_temp == 5500 and tint == 0:
         return image
     
-    # Calculate RGB multipliers
-    r_mult, g_mult, b_mult = calculate_white_balance_multipliers(
-        current_temp, target_temp, tint
-    )
+    # Calculate RGB multipliers for direct temperature adjustment
+    # Using simplified blackbody approximation
+    r_mult, g_mult, b_mult = calculate_direct_wb_multipliers(target_temp, tint)
     
     # Apply multipliers to each channel
     adjusted = image.copy()
@@ -743,13 +796,13 @@ def apply_all_adjustments(
     exposure: float = 0.0,
     shadows: float = 0.0,
     highlights: float = 0.0,
-    current_wb: float = 5500.0,
     target_wb: float = 5500.0,
     wb_tint: float = 0.0,
     denoise_strength: float = 0.0,
     sharpen_amount: float = 0.0,
     sharpen_radius: float = 1.0,
-    sharpen_threshold: float = 0.0
+    sharpen_threshold: float = 0.0,
+    use_wb: bool = False
 ) -> np.ndarray:
     """
     Apply all editing adjustments in the correct order using optimized algorithms.
@@ -808,8 +861,8 @@ def apply_all_adjustments(
                 _ADJUSTMENT_CACHE.put(cache_key, result)
     
     # 2. White balance (should be done on linear data)
-    if current_wb != target_wb or wb_tint != 0:
-        result = adjust_white_balance(result, current_wb, target_wb, wb_tint)
+    if use_wb:
+        result = adjust_white_balance(result, target_wb, wb_tint)
     
     # 3. Exposure adjustment (global multiplicative)
     if exposure != 0:
@@ -887,10 +940,10 @@ class GlobalAdjustments:
             exposure=self.exposure,
             shadows=self.shadows,
             highlights=self.highlights,
-            current_wb=current_wb,
             target_wb=target_wb,
             wb_tint=self.wb_tint,
-            denoise_strength=self.denoise_strength
+            denoise_strength=self.denoise_strength,
+            use_wb=True
         )
 
 

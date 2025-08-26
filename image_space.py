@@ -2128,9 +2128,9 @@ class MainWindow(QMainWindow):
             exposure=exposure,
             shadows=shadows,
             highlights=highlights,
-            current_wb=self.original_white_balance,
             target_wb=target_wb,
             wb_tint=0.0,
+            use_wb=self.ui.enableWhiteBalanceCheckBox.isChecked(),
             denoise_strength=denoise_strength,
             sharpen_amount=sharpen_amount,
             sharpen_radius=1.0,  # Default radius - could be made configurable later
@@ -2435,6 +2435,8 @@ class MainWindow(QMainWindow):
 
         use_original_filenames = False # Temporary bool to block depricated feature
 
+        use_wb = self.ui.enableWhiteBalanceCheckBox.isChecked()
+
         # Process each group with its specific calibration (local processing)
         for group_name, group_images in image_groups.items():
             if self.ui.dontUseColourChartCheckBox.isChecked():
@@ -2491,7 +2493,7 @@ class MainWindow(QMainWindow):
                     use_export_schema=self.use_export_schema, custom_name=custom_name,
                     root_folder=root_folder, group_name=group_name,
                     use_chart=use_chart, exposure_adj=exposure_adj,
-                    shadow_adj=shadow_adj, highlight_adj=highlight_adj,
+                    shadow_adj=shadow_adj, highlight_adj=highlight_adj, use_white_balance=use_wb,
                     white_balance_adj=white_balance_adj, denoise_strength=denoise_strength,
                     sharpen_amount=sharpen_amount, downsample_percentage=downsample_percentage
                 )

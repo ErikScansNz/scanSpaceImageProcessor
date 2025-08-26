@@ -210,7 +210,8 @@ class ImageCorrectionWorker(QRunnable):
                  use_chart: bool = True, exposure_adj: float = 0.0,
                  shadow_adj: float = 0.0, highlight_adj: float = 0.0, 
                  white_balance_adj: int = 5500, denoise_strength: float = 0.0,
-                 sharpen_amount: float = 0.0, downsample_percentage: float = 100.0):
+                 sharpen_amount: float = 0.0, downsample_percentage: float = 100.0,
+                 use_white_balance: bool = False):
         super().__init__()
         self.images = images
         self.swatches = swatches
@@ -241,6 +242,7 @@ class ImageCorrectionWorker(QRunnable):
         self.shadow_adj = shadow_adj
         self.highlight_adj = highlight_adj
         self.white_balance_adj = white_balance_adj
+        self.use_white_balance = use_white_balance
         self.denoise_strength = denoise_strength
         self.sharpen_amount = sharpen_amount
         self.downsample_percentage = downsample_percentage
@@ -334,16 +336,13 @@ class ImageCorrectionWorker(QRunnable):
         Returns:
             np.ndarray: Adjusted image array
         """
-        # Get current white balance from metadata if available
-        current_wb = self._extract_white_balance_from_exif(img_path)
-            
         # Apply all adjustments using editing tools
         adjusted = apply_all_adjustments(
             img_array,
             exposure=self.exposure_adj,
             shadows=self.shadow_adj,
             highlights=self.highlight_adj,
-            current_wb=current_wb,
+            use_wb=self.use_white_balance,
             target_wb=self.white_balance_adj,
             wb_tint=0.0,
             denoise_strength=self.denoise_strength,
@@ -884,7 +883,6 @@ class ImageCorrectionWorker(QRunnable):
                     # Apply image adjustments AFTER chart correction if they're not at defaults
                     if self._has_non_default_adjustments():
                         # Get current white balance from metadata
-                        current_wb = self._extract_white_balance_from_exif(img_path)
                         
                         # Apply only non-default adjustments
                         corrected = apply_all_adjustments(
@@ -892,8 +890,8 @@ class ImageCorrectionWorker(QRunnable):
                             exposure=self.exposure_adj if self.exposure_adj != 0.0 else 0.0,
                             shadows=self.shadow_adj if self.shadow_adj != 0.0 else 0.0,
                             highlights=self.highlight_adj if self.highlight_adj != 0.0 else 0.0,
-                            current_wb=current_wb,
-                            target_wb=self.white_balance_adj if self.white_balance_adj != 5500 else current_wb,
+                            use_wb=self.use_white_balance,
+                            target_wb=self.white_balance_adj,
                             wb_tint=0.0,
                             denoise_strength=self.denoise_strength if hasattr(self, 'denoise_strength') and self.denoise_strength != 0.0 else 0.0
                         )
