@@ -2473,8 +2473,9 @@ class MainWindow(QMainWindow):
                 continue
                 
             group_name = metadata.get('group_name', 'All Images')
-            calibration = self.group_calibrations[group_name]
-            metadata['calibration'] = calibration['file']
+            if not self.ui.dontUseColourChartCheckBox.isChecked():
+                calibration = self.group_calibrations[group_name]
+                metadata['calibration'] = calibration['file']
             item.setData(Qt.UserRole, metadata)
 
         # Flatten all images from all groups for processing while preserving original order
