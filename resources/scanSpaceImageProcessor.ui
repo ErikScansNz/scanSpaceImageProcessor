@@ -1557,13 +1557,6 @@ li.checked::marker { content: &quot;\2612&quot;; }
              </property>
             </widget>
            </item>
-           <item row="0" column="0">
-            <widget class="QCheckBox" name="enableRescaleCheckBox">
-             <property name="text">
-              <string>Enable Downsample</string>
-             </property>
-            </widget>
-           </item>
            <item row="4" column="0" colspan="3">
             <widget class="QFrame" name="frame_2">
              <property name="frameShape">
@@ -1574,7 +1567,11 @@ li.checked::marker { content: &quot;\2612&quot;; }
              </property>
              <layout class="QHBoxLayout" name="horizontalLayout_7">
               <item>
-               <widget class="QSpinBox" name="xDimensionOutputSpinbox"/>
+               <widget class="QSpinBox" name="xDimensionOutputSpinbox">
+                <property name="maximum">
+                 <number>15000</number>
+                </property>
+               </widget>
               </item>
               <item>
                <widget class="QLabel" name="label_19">
@@ -1587,7 +1584,11 @@ li.checked::marker { content: &quot;\2612&quot;; }
                </widget>
               </item>
               <item>
-               <widget class="QSpinBox" name="yDiemnsionOutputSpinbox"/>
+               <widget class="QSpinBox" name="yDiemnsionOutputSpinbox">
+                <property name="maximum">
+                 <number>15000</number>
+                </property>
+               </widget>
               </item>
              </layout>
             </widget>
@@ -1626,6 +1627,13 @@ li.checked::marker { content: &quot;\2612&quot;; }
              </property>
              <property name="alignment">
               <set>Qt::AlignCenter</set>
+             </property>
+            </widget>
+           </item>
+           <item row="0" column="0" colspan="2">
+            <widget class="QCheckBox" name="enableRescaleCheckBox">
+             <property name="text">
+              <string>Enable Downsample</string>
              </property>
             </widget>
            </item>

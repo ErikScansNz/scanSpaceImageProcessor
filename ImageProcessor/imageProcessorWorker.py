@@ -210,7 +210,7 @@ class ImageCorrectionWorker(QRunnable):
                  use_chart: bool = True, exposure_adj: float = 0.0,
                  shadow_adj: float = 0.0, highlight_adj: float = 0.0, 
                  white_balance_adj: int = 5500, denoise_strength: float = 0.0,
-                 sharpen_amount: float = 0.0):
+                 sharpen_amount: float = 0.0, downsample_percentage: float = 100.0):
         super().__init__()
         self.images = images
         self.swatches = swatches
@@ -243,6 +243,7 @@ class ImageCorrectionWorker(QRunnable):
         self.white_balance_adj = white_balance_adj
         self.denoise_strength = denoise_strength
         self.sharpen_amount = sharpen_amount
+        self.downsample_percentage = downsample_percentage
 
         # EXIF copy manager for thread-safe metadata operations
         self.exif_manager = ExifCopyManager()
@@ -301,6 +302,11 @@ class ImageCorrectionWorker(QRunnable):
             raw_img_float = np.array(rgb, dtype=np.float32) / 65535.0
             del rgb  # Delete rgb array after conversion
             gc.collect()
+            
+            # Apply downsampling if percentage is less than 100%
+            if self.downsample_percentage < 100.0:
+                raw_img_float = self._apply_downsampling(raw_img_float, self.downsample_percentage)
+                
             return raw_img_float
 
     def apply_colour_correction(self, img_array: np.ndarray) -> np.ndarray:
@@ -1037,3 +1043,39 @@ class ImageCorrectionWorker(QRunnable):
         del masked_pixels_count
 
         return corrected
+    
+    def _apply_downsampling(self, img_array: np.ndarray, percentage: float) -> np.ndarray:
+        """
+        Apply downsampling to the image based on percentage.
+        
+        Args:
+            img_array: Input image array
+            percentage: Downsample percentage (0-100)
+            
+        Returns:
+            np.ndarray: Downsampled image array
+        """
+        if percentage >= 100.0:
+            return img_array
+            
+        h, w = img_array.shape[:2]
+        
+        # Calculate linear scale factor from area percentage
+        area_scale = percentage / 100.0
+        linear_scale = area_scale ** 0.5  # Square root for linear dimension scaling
+        
+        # Calculate new dimensions
+        new_w = max(1, int(w * linear_scale))
+        new_h = max(1, int(h * linear_scale))
+        
+        # Use OpenCV for high-quality downsampling
+        downsampled = cv2.resize(img_array, (new_w, new_h), interpolation=cv2.INTER_AREA)
+        
+        # Log the downsampling operation
+        original_mp = (w * h) / 1_000_000.0
+        new_mp = (new_w * new_h) / 1_000_000.0
+        self.signals.log.emit(
+            f"[Downsample] {percentage:.1f}% - {w}x{h} ({original_mp:.1f}MP) → {new_w}x{new_h} ({new_mp:.1f}MP)"
+        )
+        
+        return downsampled

@@ -25,6 +25,7 @@ import numpy as np
 from typing import Tuple, Optional, Union
 import colour
 import cv2
+from PySide6.QtCore import Qt
 from scipy import ndimage
 import gc
 import sys
@@ -895,6 +896,380 @@ class GlobalAdjustments:
 
 # Global instance for use across application
 global_adjustments = GlobalAdjustments()
+
+
+# =============================================================================
+# IMAGE RESCALING FUNCTIONS
+# =============================================================================
+
+class RescalingCalculator:
+    """
+    Handles rescaling calculations for image downsample operations.
+    
+    Synchronizes between percentage, megapixel, and dimension inputs
+    based on the original RAW image dimensions.
+    """
+    
+    def __init__(self):
+        self.original_width = 0
+        self.original_height = 0
+        self.original_megapixels = 0.0
+        self._updating = False  # Prevent recursive updates
+    
+    def set_original_dimensions(self, width: int, height: int):
+        """
+        Set the original RAW image dimensions.
+        
+        Args:
+            width: Original image width in pixels
+            height: Original image height in pixels
+        """
+        self.original_width = width
+        self.original_height = height
+        self.original_megapixels = (width * height) / 1_000_000.0
+    
+    def calculate_from_percentage(self, percentage: float) -> tuple:
+        """
+        Calculate all rescaling values from percentage input.
+        
+        Args:
+            percentage: Downsample percentage (0-100)
+            
+        Returns:
+            tuple: (megapixels, width, height)
+        """
+        if self.original_megapixels == 0:
+            return 0.0, 0, 0
+            
+        # Calculate scale factor
+        scale_factor = percentage / 100.0
+        
+        # Calculate new values
+        new_megapixels = self.original_megapixels * scale_factor
+        new_width = int(self.original_width * (scale_factor ** 0.5))
+        new_height = int(self.original_height * (scale_factor ** 0.5))
+        
+        return new_megapixels, new_width, new_height
+    
+    def calculate_from_megapixels(self, target_megapixels: float) -> tuple:
+        """
+        Calculate all rescaling values from megapixel input.
+        
+        Args:
+            target_megapixels: Target megapixels
+            
+        Returns:
+            tuple: (percentage, width, height)
+        """
+        if self.original_megapixels == 0:
+            return 0.0, 0, 0
+            
+        # Calculate scale factor
+        scale_factor = target_megapixels / self.original_megapixels
+        scale_factor = max(0.01, min(1.0, scale_factor))  # Clamp between 1% and 100%
+        
+        # Calculate new values
+        percentage = scale_factor * 100.0
+        linear_scale = scale_factor ** 0.5
+        new_width = int(self.original_width * linear_scale)
+        new_height = int(self.original_height * linear_scale)
+        
+        return percentage, new_width, new_height
+    
+    def calculate_from_width(self, target_width: int) -> tuple:
+        """
+        Calculate all rescaling values from width input (maintaining aspect ratio).
+        
+        Args:
+            target_width: Target width in pixels
+            
+        Returns:
+            tuple: (percentage, megapixels, height)
+        """
+        if self.original_width == 0:
+            return 0.0, 0.0, 0
+            
+        # Calculate scale factor from width
+        linear_scale = target_width / self.original_width
+        linear_scale = max(0.1, min(1.0, linear_scale))  # Clamp between 10% and 100%
+        
+        # Calculate new values maintaining aspect ratio
+        new_height = int(self.original_height * linear_scale)
+        scale_factor = linear_scale ** 2  # Area scale factor
+        percentage = scale_factor * 100.0
+        new_megapixels = self.original_megapixels * scale_factor
+        
+        return percentage, new_megapixels, new_height
+    
+    def calculate_from_height(self, target_height: int) -> tuple:
+        """
+        Calculate all rescaling values from height input (maintaining aspect ratio).
+        
+        Args:
+            target_height: Target height in pixels
+            
+        Returns:
+            tuple: (percentage, megapixels, width)
+        """
+        if self.original_height == 0:
+            return 0.0, 0.0, 0
+            
+        # Calculate scale factor from height
+        linear_scale = target_height / self.original_height
+        linear_scale = max(0.1, min(1.0, linear_scale))  # Clamp between 10% and 100%
+        
+        # Calculate new values maintaining aspect ratio
+        new_width = int(self.original_width * linear_scale)
+        scale_factor = linear_scale ** 2  # Area scale factor
+        percentage = scale_factor * 100.0
+        new_megapixels = self.original_megapixels * scale_factor
+        
+        return percentage, new_megapixels, new_width
+
+
+def setup_rescaling_controls(main_window):
+    """
+    Setup the rescaling controls and connect their signals.
+    
+    Args:
+        main_window: Reference to the main window instance
+    """
+    # Create rescaling calculator instance
+    main_window.rescaling_calculator = RescalingCalculator()
+    
+    # Connect the enableRescaleCheckBox
+    if hasattr(main_window.ui, 'enableRescaleCheckBox'):
+        main_window.ui.enableRescaleCheckBox.toggled.connect(
+            lambda checked: _on_rescale_enabled_toggled(main_window, checked)
+        )
+    
+    # Connect the input controls
+    if hasattr(main_window.ui, 'targetDownsamplePercentDoubleSpinbox'):
+        main_window.ui.targetDownsamplePercentDoubleSpinbox.valueChanged.connect(
+            lambda value: _on_percentage_changed(main_window, value)
+        )
+    
+    if hasattr(main_window.ui, 'targetDownsampleMpxDoubleSpinBox'):
+        main_window.ui.targetDownsampleMpxDoubleSpinBox.valueChanged.connect(
+            lambda value: _on_megapixels_changed(main_window, value)
+        )
+    
+    if hasattr(main_window.ui, 'xDimensionOutputSpinbox'):
+        main_window.ui.xDimensionOutputSpinbox.valueChanged.connect(
+            lambda value: _on_width_changed(main_window, value)
+        )
+    
+    if hasattr(main_window.ui, 'yDiemnsionOutputSpinbox'):
+        main_window.ui.yDiemnsionOutputSpinbox.valueChanged.connect(
+            lambda value: _on_height_changed(main_window, value)
+        )
+
+
+def _on_rescale_enabled_toggled(main_window, checked):
+    """Handle rescale checkbox toggle."""
+    # Enable/disable the rescaling controls
+    controls = [
+        'targetDownsamplePercentDoubleSpinbox',
+        'targetDownsampleMpxDoubleSpinBox', 
+        'xDimensionOutputSpinbox',
+        'yDiemnsionOutputSpinbox'
+    ]
+    
+    for control_name in controls:
+        if hasattr(main_window.ui, control_name):
+            control = getattr(main_window.ui, control_name)
+            control.setEnabled(checked)
+    
+    if checked:
+        # Initialize with current image dimensions
+        _update_rescaling_from_current_image(main_window)
+
+
+def _update_rescaling_from_current_image(main_window):
+    """Update rescaling calculator with current image dimensions."""
+    try:
+        # Get currently selected image
+        current_item = main_window.ui.imagesListWidget.currentItem()
+        if not current_item:
+            return
+            
+        metadata = current_item.data(Qt.UserRole)
+        if metadata.get('is_group_header', False):
+            return
+            
+        image_path = metadata.get('input_path')
+        if not image_path:
+            return
+        
+        # Try to get dimensions from RAW file metadata (you may need to implement this)
+        # For now, we'll use some example dimensions - you should replace this with actual metadata reading
+        width, height = _get_image_dimensions(image_path)
+        
+        if width > 0 and height > 0:
+            main_window.rescaling_calculator.set_original_dimensions(width, height)
+            
+            # Initialize UI controls with current image info
+            main_window.rescaling_calculator._updating = True
+            try:
+                # Set percentage to 100% (no downsampling)
+                if hasattr(main_window.ui, 'targetDownsamplePercentDoubleSpinbox'):
+                    main_window.ui.targetDownsamplePercentDoubleSpinbox.setValue(100.0)
+                
+                # Set megapixels to current image
+                if hasattr(main_window.ui, 'targetDownsampleMpxDoubleSpinBox'):
+                    main_window.ui.targetDownsampleMpxDoubleSpinBox.setValue(main_window.rescaling_calculator.original_megapixels)
+                
+                # Set dimensions to current image
+                if hasattr(main_window.ui, 'xDimensionOutputSpinbox'):
+                    main_window.ui.xDimensionOutputSpinbox.setValue(width)
+                
+                if hasattr(main_window.ui, 'yDiemnsionOutputSpinbox'):
+                    main_window.ui.yDiemnsionOutputSpinbox.setValue(height)
+                    
+            finally:
+                main_window.rescaling_calculator._updating = False
+                
+
+    except Exception as e:
+        if hasattr(main_window, 'log_error'):
+            main_window.log_error(f"[Rescaling] Error updating from current image: {e}")
+
+
+def _get_image_dimensions(image_path: str) -> tuple:
+    """
+    Get image dimensions from file metadata.
+    
+    Args:
+        image_path: Path to the image file
+        
+    Returns:
+        tuple: (width, height) or (0, 0) if unable to read
+    """
+    try:
+        # For RAW files, try to use rawpy to get dimensions
+        if image_path.lower().endswith(('.nef', '.cr2', '.cr3', '.dng', '.arw', '.raw')):
+            try:
+                import rawpy
+                with rawpy.imread(image_path) as raw:
+                    return raw.sizes.raw_width, raw.sizes.raw_height
+            except Exception:
+                pass
+        
+        # For other image formats, try PIL
+        try:
+            from PIL import Image
+            with Image.open(image_path) as img:
+                return img.size  # Returns (width, height)
+        except Exception:
+            pass
+            
+        # Try OpenCV as fallback
+        try:
+            import cv2
+            img = cv2.imread(image_path)
+            if img is not None:
+                h, w = img.shape[:2]
+                return w, h
+        except Exception:
+            pass
+            
+    except Exception:
+        pass
+    
+    # Return default if all methods fail
+    return 0, 0
+
+
+def _on_percentage_changed(main_window, value):
+    """Handle percentage spinbox change."""
+    if main_window.rescaling_calculator._updating:
+        return
+        
+    main_window.rescaling_calculator._updating = True
+    try:
+        megapixels, width, height = main_window.rescaling_calculator.calculate_from_percentage(value)
+        
+        # Update other controls
+        if hasattr(main_window.ui, 'targetDownsampleMpxDoubleSpinBox'):
+            main_window.ui.targetDownsampleMpxDoubleSpinBox.setValue(megapixels)
+        
+        if hasattr(main_window.ui, 'xDimensionOutputSpinbox'):
+            main_window.ui.xDimensionOutputSpinbox.setValue(width)
+            
+        if hasattr(main_window.ui, 'yDiemnsionOutputSpinbox'):
+            main_window.ui.yDiemnsionOutputSpinbox.setValue(height)
+            
+    finally:
+        main_window.rescaling_calculator._updating = False
+
+
+def _on_megapixels_changed(main_window, value):
+    """Handle megapixels spinbox change."""
+    if main_window.rescaling_calculator._updating:
+        return
+        
+    main_window.rescaling_calculator._updating = True
+    try:
+        percentage, width, height = main_window.rescaling_calculator.calculate_from_megapixels(value)
+        
+        # Update other controls
+        if hasattr(main_window.ui, 'targetDownsamplePercentDoubleSpinbox'):
+            main_window.ui.targetDownsamplePercentDoubleSpinbox.setValue(percentage)
+        
+        if hasattr(main_window.ui, 'xDimensionOutputSpinbox'):
+            main_window.ui.xDimensionOutputSpinbox.setValue(width)
+            
+        if hasattr(main_window.ui, 'yDiemnsionOutputSpinbox'):
+            main_window.ui.yDiemnsionOutputSpinbox.setValue(height)
+            
+    finally:
+        main_window.rescaling_calculator._updating = False
+
+
+def _on_width_changed(main_window, value):
+    """Handle width spinbox change."""
+    if main_window.rescaling_calculator._updating:
+        return
+        
+    main_window.rescaling_calculator._updating = True
+    try:
+        percentage, megapixels, height = main_window.rescaling_calculator.calculate_from_width(value)
+        
+        # Update other controls
+        if hasattr(main_window.ui, 'targetDownsamplePercentDoubleSpinbox'):
+            main_window.ui.targetDownsamplePercentDoubleSpinbox.setValue(percentage)
+        
+        if hasattr(main_window.ui, 'targetDownsampleMpxDoubleSpinBox'):
+            main_window.ui.targetDownsampleMpxDoubleSpinBox.setValue(megapixels)
+            
+        if hasattr(main_window.ui, 'yDiemnsionOutputSpinbox'):
+            main_window.ui.yDiemnsionOutputSpinbox.setValue(height)
+            
+    finally:
+        main_window.rescaling_calculator._updating = False
+
+
+def _on_height_changed(main_window, value):
+    """Handle height spinbox change."""
+    if main_window.rescaling_calculator._updating:
+        return
+        
+    main_window.rescaling_calculator._updating = True
+    try:
+        percentage, megapixels, width = main_window.rescaling_calculator.calculate_from_height(value)
+        
+        # Update other controls
+        if hasattr(main_window.ui, 'targetDownsamplePercentDoubleSpinbox'):
+            main_window.ui.targetDownsamplePercentDoubleSpinbox.setValue(percentage)
+        
+        if hasattr(main_window.ui, 'targetDownsampleMpxDoubleSpinBox'):
+            main_window.ui.targetDownsampleMpxDoubleSpinBox.setValue(megapixels)
+            
+        if hasattr(main_window.ui, 'xDimensionOutputSpinbox'):
+            main_window.ui.xDimensionOutputSpinbox.setValue(width)
+            
+    finally:
+        main_window.rescaling_calculator._updating = False
 
 
 # =============================================================================

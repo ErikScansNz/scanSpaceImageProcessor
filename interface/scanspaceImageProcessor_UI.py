@@ -846,11 +846,6 @@ class Ui_MainWindow(object):
 
         self.gridLayout_4.addWidget(self.label_9, 2, 0, 1, 1)
 
-        self.enableRescaleCheckBox = QCheckBox(self.groupBox_5)
-        self.enableRescaleCheckBox.setObjectName(u"enableRescaleCheckBox")
-
-        self.gridLayout_4.addWidget(self.enableRescaleCheckBox, 0, 0, 1, 1)
-
         self.frame_2 = QFrame(self.groupBox_5)
         self.frame_2.setObjectName(u"frame_2")
         self.frame_2.setFrameShape(QFrame.StyledPanel)
@@ -859,6 +854,7 @@ class Ui_MainWindow(object):
         self.horizontalLayout_7.setObjectName(u"horizontalLayout_7")
         self.xDimensionOutputSpinbox = QSpinBox(self.frame_2)
         self.xDimensionOutputSpinbox.setObjectName(u"xDimensionOutputSpinbox")
+        self.xDimensionOutputSpinbox.setMaximum(15000)
 
         self.horizontalLayout_7.addWidget(self.xDimensionOutputSpinbox)
 
@@ -870,6 +866,7 @@ class Ui_MainWindow(object):
 
         self.yDiemnsionOutputSpinbox = QSpinBox(self.frame_2)
         self.yDiemnsionOutputSpinbox.setObjectName(u"yDiemnsionOutputSpinbox")
+        self.yDiemnsionOutputSpinbox.setMaximum(15000)
 
         self.horizontalLayout_7.addWidget(self.yDiemnsionOutputSpinbox)
 
@@ -898,6 +895,11 @@ class Ui_MainWindow(object):
         self.label_20.setAlignment(Qt.AlignCenter)
 
         self.gridLayout_4.addWidget(self.label_20, 3, 0, 1, 3)
+
+        self.enableRescaleCheckBox = QCheckBox(self.groupBox_5)
+        self.enableRescaleCheckBox.setObjectName(u"enableRescaleCheckBox")
+
+        self.gridLayout_4.addWidget(self.enableRescaleCheckBox, 0, 0, 1, 2)
 
 
         self.gridLayout.addWidget(self.groupBox_5, 0, 0, 1, 2)
@@ -1156,12 +1158,12 @@ class Ui_MainWindow(object):
         self.label_18.setText(QCoreApplication.translate("MainWindow", u"Highlights", None))
         self.groupBox_5.setTitle(QCoreApplication.translate("MainWindow", u"Downsample Image", None))
         self.label_9.setText(QCoreApplication.translate("MainWindow", u"Target Mpx", None))
-        self.enableRescaleCheckBox.setText(QCoreApplication.translate("MainWindow", u"Enable Downsample", None))
         self.label_19.setText(QCoreApplication.translate("MainWindow", u"by", None))
         self.targetDownsamplePercentDoubleSpinbox.setSuffix(QCoreApplication.translate("MainWindow", u"%", None))
         self.label_11.setText(QCoreApplication.translate("MainWindow", u"Target Percent", None))
         self.targetDownsampleMpxDoubleSpinBox.setSuffix(QCoreApplication.translate("MainWindow", u"mp", None))
         self.label_20.setText(QCoreApplication.translate("MainWindow", u"Selected Images Output Dimensions", None))
+        self.enableRescaleCheckBox.setText(QCoreApplication.translate("MainWindow", u"Enable Downsample", None))
         self.toolBox.setItemText(self.toolBox.indexOf(self.imageEditingTab), QCoreApplication.translate("MainWindow", u"Image Editing", None))
         self.label_16.setText(QCoreApplication.translate("MainWindow", u"Format", None))
         self.bitDepthFrame.setTitle(QCoreApplication.translate("MainWindow", u"Bit Depth", None))

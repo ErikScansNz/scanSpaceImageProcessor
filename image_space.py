@@ -983,6 +983,10 @@ class MainWindow(QMainWindow):
         from ImageProcessor.fileNamingSchema import FileNamingSchema
         self.file_naming_schema = FileNamingSchema()
         self.file_naming_schema.setup_ui_controls(self)
+        
+        # Set up rescaling controls
+        from ImageProcessor.editingTools import setup_rescaling_controls
+        setup_rescaling_controls(self)
 
         # Connect quit action if it exists
         if hasattr(self.ui, 'actionQuit'):
@@ -1889,6 +1893,8 @@ class MainWindow(QMainWindow):
         path_to_show = meta.get('output_path') or meta['input_path']
         input_path = meta.get('input_path')
 
+        found_image = False
+
         if path_to_show:
             # Debug logging for path selection
             output_path = meta.get('output_path')
@@ -1910,9 +1916,7 @@ class MainWindow(QMainWindow):
 
                 # If this is the same path as what was already pending, extend the timer
                 if previous_pending == input_path and self.raw_load_timer.isActive():
-                    self.log_debug(f"[Preview] Extending timer for same image: {os.path.basename(input_path)}")
-                    self.raw_load_timer.stop()
-                    self.raw_load_timer.start(100)
+                    self.log_debug(f"[Preview] waiting for image to load: {os.path.basename(input_path)}")
                 else:
                     # Cancel previous timer and start new one
                     self.raw_load_timer.stop()
@@ -1922,6 +1926,7 @@ class MainWindow(QMainWindow):
 
                     self.log_debug(f"[Preview] Scheduling RAW load for: {os.path.basename(input_path)} (100ms delay)")
                     self.raw_load_timer.start(100)
+
             else:
                 # Cancel any pending RAW load
                 self.raw_load_timer.stop()
@@ -1931,11 +1936,6 @@ class MainWindow(QMainWindow):
                 self._clear_preview_state()
                 self.preview_thumbnail(path_to_show)
 
-        if meta.get('chart'):
-            self.corrected_preview_pixmap = self.pixmap_from_array(meta['debug_images']['corrected_image'])
-            self.show_debug_frame(True)
-        else:
-            self.show_debug_frame(False)
 
         if self.ui.displayDebugExposureDataCheckBox.isChecked():
             self.show_exposure_debug_overlay()
@@ -2455,7 +2455,7 @@ class MainWindow(QMainWindow):
                 except Exception as e:
                     self.log_error(f"[Process] Error extracting calibration for group '{group_name}': {e}")
         
-        if missing_calibrations:
+        if missing_calibrations and not self.ui.dontUseColourChartCheckBox.isChecked():
             self.log_info(f"❌ Missing calibrations for groups: {', '.join(missing_calibrations)}")
             self.log_info("❗ Please select and detect charts for all groups, or set a default calibration")
             return
@@ -2580,8 +2580,12 @@ class MainWindow(QMainWindow):
 
         # Process each group with its specific calibration (local processing)
         for group_name, group_images in image_groups.items():
-            calibration = self.group_calibrations[group_name]
-            swatches = calibration['swatches']
+            if self.ui.dontUseColourChartCheckBox.isChecked():
+                calibration = None
+                swatches = None
+            else:
+                calibration = self.group_calibrations[group_name]
+                swatches = calibration['swatches']
             
             # Dispatch group images in batches
             size = max(1, len(group_images) // thr)  # Rough batching
@@ -2616,6 +2620,12 @@ class MainWindow(QMainWindow):
                 denoise_strength = self.ui.denoiseDoubleSpinBox.value() if self.ui.denoiseImageCheckBox.isChecked() else 0.0
                 sharpen_amount = self.ui.sharpenDoubleSpinBox.value() if self.ui.sharpenImageCheckBox.isChecked() else 0.0
                 
+                # Get downsample value from rescaling controls
+                downsample_percentage = 100.0  # Default to no downsampling
+                if hasattr(self.ui, 'enableRescaleCheckBox') and self.ui.enableRescaleCheckBox.isChecked():
+                    if hasattr(self.ui, 'targetDownsamplePercentDoubleSpinbox'):
+                        downsample_percentage = self.ui.targetDownsamplePercentDoubleSpinbox.value()
+                
                 worker = ImageCorrectionWorker(
                     chunk, swatches, outf, sig, qual, rename_map,
                     name_base=name_base, padding=padding,
@@ -2626,7 +2636,7 @@ class MainWindow(QMainWindow):
                     use_chart=use_chart, exposure_adj=exposure_adj,
                     shadow_adj=shadow_adj, highlight_adj=highlight_adj,
                     white_balance_adj=white_balance_adj, denoise_strength=denoise_strength,
-                    sharpen_amount=sharpen_amount
+                    sharpen_amount=sharpen_amount, downsample_percentage=downsample_percentage
                 )
 
                 shadow_limit = self.ui.shadowLimitSpinBox.value() / 100.0
@@ -2780,11 +2790,7 @@ class MainWindow(QMainWindow):
             for i in range(self.ui.imagesListWidget.count()):
                 item = self.ui.imagesListWidget.item(i)
                 meta = item.data(Qt.UserRole)
-                
-                # Skip group headers
-                if meta.get('is_group_header', False):
-                    continue
-                    
+
                 if meta.get('input_path') == image_path or meta.get('output_path') == image_path:
                     self.ui.imagesListWidget.setCurrentRow(i)
                     break
