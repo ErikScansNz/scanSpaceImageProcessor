@@ -1865,7 +1865,7 @@ class MainWindow(QMainWindow):
 
         # Store group information for calibration
         self.current_chart_group = group_name
-        if detect:
+        if not self.manual_selection_mode:
             self.detect_chart(input_source=chart_path, is_npy=False)
 
     @ChartTools.exit_manual_mode
@@ -3123,7 +3123,7 @@ class MainWindow(QMainWindow):
         or auto-detection as fallback.
         """
 
-        detected = False  # <-- Always define this up front!
+        detected = False
 
         if input_source is not None:
             img_fp = np.load(input_source) if is_npy else input_source
@@ -3162,11 +3162,8 @@ class MainWindow(QMainWindow):
         QApplication.processEvents()
         
         try:
-            if self.selected_chart_type == "Colour Checker Classic":
-                results = detect_colour_checkers_inference(img_fp, additional_data=True)
-            else:
-                results = detect_colour_checkers_segmentation(img_fp, additional_data=True,
-                                                              swatch_minimum_area_factor=30)
+            results = detect_colour_checkers_segmentation(img_fp, additional_data=True,
+                                                          swatch_minimum_area_factor=30)
         finally:
             # Close progress dialog
             progress.close()
