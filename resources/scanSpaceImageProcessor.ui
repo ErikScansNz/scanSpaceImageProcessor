@@ -21,6 +21,13 @@
   </property>
   <widget class="QWidget" name="centralwidget">
    <layout class="QGridLayout" name="gridLayout_2">
+    <item row="2" column="0" colspan="4">
+     <widget class="QLabel" name="serverStatusLabel">
+      <property name="text">
+       <string>Server Satus:</string>
+      </property>
+     </widget>
+    </item>
     <item row="0" column="3">
      <layout class="QVBoxLayout" name="verticalLayout_4">
       <property name="spacing">
@@ -632,6 +639,58 @@
            </property>
           </widget>
          </item>
+         <item>
+          <widget class="QScrollArea" name="thumbnailContainerScrollArea">
+           <property name="widgetResizable">
+            <bool>true</bool>
+           </property>
+           <widget class="QWidget" name="scrollAreaWidgetContents">
+            <property name="geometry">
+             <rect>
+              <x>0</x>
+              <y>0</y>
+              <width>344</width>
+              <height>310</height>
+             </rect>
+            </property>
+           </widget>
+          </widget>
+         </item>
+         <item>
+          <widget class="QFrame" name="frame_3">
+           <property name="frameShape">
+            <enum>QFrame::StyledPanel</enum>
+           </property>
+           <property name="frameShadow">
+            <enum>QFrame::Raised</enum>
+           </property>
+           <layout class="QHBoxLayout" name="horizontalLayout_9">
+            <item>
+             <widget class="QCheckBox" name="displayImagesAsThumbnailsCheckBox">
+              <property name="text">
+               <string>Display Thumbnails</string>
+              </property>
+             </widget>
+            </item>
+            <item>
+             <widget class="QSlider" name="thumbnailZoomLevelHorizontalSlider">
+              <property name="minimum">
+               <number>1</number>
+              </property>
+              <property name="maximum">
+               <number>6</number>
+              </property>
+              <property name="value">
+               <number>3</number>
+              </property>
+              <property name="orientation">
+               <enum>Qt::Horizontal</enum>
+              </property>
+             </widget>
+            </item>
+           </layout>
+          </widget>
+         </item>
         </layout>
        </item>
        <item>
@@ -673,13 +732,6 @@
       </layout>
      </widget>
     </item>
-    <item row="1" column="0" colspan="4">
-     <widget class="QLabel" name="serverStatusLabel">
-      <property name="text">
-       <string>Server Satus:</string>
-      </property>
-     </widget>
-    </item>
     <item row="0" column="1" colspan="2">
      <widget class="QToolBox" name="toolBox">
       <property name="sizePolicy">
@@ -704,7 +756,7 @@
        <enum>QFrame::NoFrame</enum>
       </property>
       <property name="currentIndex">
-       <number>1</number>
+       <number>0</number>
       </property>
       <property name="tabSpacing">
        <number>6</number>
@@ -722,6 +774,13 @@
         <string>Colour Chart Tools</string>
        </attribute>
        <layout class="QFormLayout" name="formLayout_6">
+        <item row="1" column="0" colspan="2">
+         <widget class="QComboBox" name="supportedColourChartsComboBox">
+          <property name="placeholderText">
+           <string>Supported Colour Charts</string>
+          </property>
+         </widget>
+        </item>
         <item row="2" column="0" colspan="2">
          <widget class="QPushButton" name="setSelectedAsChartPushbutton">
           <property name="text">
@@ -743,27 +802,26 @@
           </property>
          </widget>
         </item>
-        <item row="6" column="0" colspan="2">
-         <widget class="QComboBox" name="precalcChartComboBox">
-          <property name="toolTip">
-           <string>Set your custom chart folder in settings.</string>
+        <item row="5" column="0" colspan="2">
+         <widget class="Line" name="line_2">
+          <property name="sizePolicy">
+           <sizepolicy hsizetype="Expanding" vsizetype="Fixed">
+            <horstretch>0</horstretch>
+            <verstretch>0</verstretch>
+           </sizepolicy>
           </property>
-          <property name="placeholderText">
-           <string>Precalculated Chart</string>
-          </property>
-         </widget>
-        </item>
-        <item row="8" column="1">
-         <widget class="QLineEdit" name="chartPathLineEdit">
-          <property name="maximumSize">
+          <property name="minimumSize">
            <size>
-            <width>250</width>
-            <height>16777215</height>
+            <width>100</width>
+            <height>0</height>
            </size>
           </property>
+          <property name="orientation">
+           <enum>Qt::Horizontal</enum>
+          </property>
          </widget>
         </item>
-        <item row="8" column="0">
+        <item row="6" column="0">
          <widget class="QLabel" name="label_8">
           <property name="minimumSize">
            <size>
@@ -788,7 +846,17 @@
           </property>
          </widget>
         </item>
-        <item row="9" column="1">
+        <item row="6" column="1">
+         <widget class="QLineEdit" name="chartPathLineEdit">
+          <property name="maximumSize">
+           <size>
+            <width>250</width>
+            <height>16777215</height>
+           </size>
+          </property>
+         </widget>
+        </item>
+        <item row="7" column="1">
          <widget class="QPushButton" name="browseForChartPushbutton">
           <property name="minimumSize">
            <size>
@@ -807,43 +875,131 @@
           </property>
          </widget>
         </item>
-        <item row="7" column="0" colspan="2">
-         <widget class="Line" name="line_2">
-          <property name="sizePolicy">
-           <sizepolicy hsizetype="Expanding" vsizetype="Fixed">
-            <horstretch>0</horstretch>
-            <verstretch>0</verstretch>
-           </sizepolicy>
+        <item row="8" column="0" colspan="2">
+         <widget class="QGroupBox" name="groupBox_3">
+          <property name="title">
+           <string>Chart Assignment</string>
           </property>
-          <property name="minimumSize">
-           <size>
-            <width>100</width>
-            <height>0</height>
-           </size>
-          </property>
-          <property name="orientation">
-           <enum>Qt::Horizontal</enum>
-          </property>
+          <layout class="QVBoxLayout" name="verticalLayout_7">
+           <item>
+            <widget class="QCheckBox" name="usePrecalcChartCheckbox">
+             <property name="layoutDirection">
+              <enum>Qt::RightToLeft</enum>
+             </property>
+             <property name="text">
+              <string>Enable Chart Override</string>
+             </property>
+            </widget>
+           </item>
+           <item>
+            <widget class="QComboBox" name="precalcChartComboBox">
+             <property name="toolTip">
+              <string>Set your custom chart folder in settings.</string>
+             </property>
+             <property name="placeholderText">
+              <string>Precalculated Chart</string>
+             </property>
+            </widget>
+           </item>
+           <item>
+            <spacer name="verticalSpacer_4">
+             <property name="orientation">
+              <enum>Qt::Vertical</enum>
+             </property>
+             <property name="sizeType">
+              <enum>QSizePolicy::Maximum</enum>
+             </property>
+             <property name="sizeHint" stdset="0">
+              <size>
+               <width>20</width>
+               <height>40</height>
+              </size>
+             </property>
+            </spacer>
+           </item>
+           <item>
+            <widget class="Line" name="line_3">
+             <property name="orientation">
+              <enum>Qt::Horizontal</enum>
+             </property>
+            </widget>
+           </item>
+           <item>
+            <spacer name="verticalSpacer_3">
+             <property name="orientation">
+              <enum>Qt::Vertical</enum>
+             </property>
+             <property name="sizeType">
+              <enum>QSizePolicy::Maximum</enum>
+             </property>
+             <property name="sizeHint" stdset="0">
+              <size>
+               <width>20</width>
+               <height>40</height>
+              </size>
+             </property>
+            </spacer>
+           </item>
+           <item>
+            <widget class="QLabel" name="label_3">
+             <property name="font">
+              <font>
+               <bold>true</bold>
+              </font>
+             </property>
+             <property name="text">
+              <string>Advanced</string>
+             </property>
+             <property name="alignment">
+              <set>Qt::AlignCenter</set>
+             </property>
+            </widget>
+           </item>
+           <item>
+            <widget class="QPushButton" name="useSelectedChartForAllGroupsPushbutton">
+             <property name="text">
+              <string>Use Slected Chart for All Groups</string>
+             </property>
+            </widget>
+           </item>
+           <item>
+            <widget class="QPushButton" name="removeSelectedChartPushbutton">
+             <property name="text">
+              <string>Remove Selected Chart</string>
+             </property>
+            </widget>
+           </item>
+           <item>
+            <widget class="QPushButton" name="copyChartPushbutton">
+             <property name="text">
+              <string>Copy Chart from Group</string>
+             </property>
+            </widget>
+           </item>
+           <item>
+            <widget class="QPushButton" name="pasteChartPushbutton">
+             <property name="text">
+              <string>Paste Chart to Group</string>
+             </property>
+            </widget>
+           </item>
+           <item>
+            <spacer name="verticalSpacer_2">
+             <property name="orientation">
+              <enum>Qt::Vertical</enum>
+             </property>
+             <property name="sizeHint" stdset="0">
+              <size>
+               <width>20</width>
+               <height>40</height>
+              </size>
+             </property>
+            </spacer>
+           </item>
+          </layout>
          </widget>
         </item>
-        <item row="1" column="0" colspan="2">
-         <widget class="QComboBox" name="supportedColourChartsComboBox">
-          <property name="placeholderText">
-           <string>Supported Colour Charts</string>
-          </property>
-         </widget>
-        </item>
-        <item row="5" column="0">
-         <widget class="QCheckBox" name="usePrecalcChartCheckbox">
-          <property name="layoutDirection">
-           <enum>Qt::RightToLeft</enum>
-          </property>
-          <property name="text">
-           <string>Enable Chart Override</string>
-          </property>
-         </widget>
-        </item>
-        <item row="0" column="0">
+        <item row="0" column="0" colspan="2">
          <widget class="QCheckBox" name="dontUseColourChartCheckBox">
           <property name="layoutDirection">
            <enum>Qt::RightToLeft</enum>
@@ -973,6 +1129,16 @@
         <string>Image Naming</string>
        </attribute>
        <layout class="QFormLayout" name="formLayout_4">
+        <item row="0" column="0" colspan="2">
+         <widget class="QCheckBox" name="useOriginalFilenamesCheckBox">
+          <property name="layoutDirection">
+           <enum>Qt::RightToLeft</enum>
+          </property>
+          <property name="text">
+           <string>Use Original Filenames</string>
+          </property>
+         </widget>
+        </item>
         <item row="1" column="0">
          <widget class="QLabel" name="label_5">
           <property name="text">
@@ -1016,15 +1182,97 @@
           </property>
          </widget>
         </item>
-        <item row="0" column="0" colspan="2">
-         <widget class="QCheckBox" name="useOriginalFilenamesCheckBox">
-          <property name="layoutDirection">
-           <enum>Qt::RightToLeft</enum>
+        <item row="3" column="0" colspan="2">
+         <widget class="QGroupBox" name="groupBox_4">
+          <property name="maximumSize">
+           <size>
+            <width>16777215</width>
+            <height>300</height>
+           </size>
           </property>
-          <property name="text">
-           <string>Use Original Filenames</string>
+          <property name="title">
+           <string>Schema Naming</string>
           </property>
+          <layout class="QVBoxLayout" name="verticalLayout_8">
+           <item>
+            <widget class="QLineEdit" name="schemaNameLineEdit">
+             <property name="text">
+              <string>[r]/[o][n4][e]</string>
+             </property>
+            </widget>
+           </item>
+           <item>
+            <widget class="QTextEdit" name="schemaInfoQTextEdit">
+             <property name="maximumSize">
+              <size>
+               <width>16777215</width>
+               <height>200</height>
+              </size>
+             </property>
+             <property name="readOnly">
+              <bool>true</bool>
+             </property>
+             <property name="html">
+              <string>&lt;!DOCTYPE HTML PUBLIC &quot;-//W3C//DTD HTML 4.0//EN&quot; &quot;http://www.w3.org/TR/REC-html40/strict.dtd&quot;&gt;
+&lt;html&gt;&lt;head&gt;&lt;meta name=&quot;qrichtext&quot; content=&quot;1&quot; /&gt;&lt;meta charset=&quot;utf-8&quot; /&gt;&lt;style type=&quot;text/css&quot;&gt;
+p, li { white-space: pre-wrap; }
+hr { height: 1px; border-width: 0; }
+li.unchecked::marker { content: &quot;\2610&quot;; }
+li.checked::marker { content: &quot;\2612&quot;; }
+&lt;/style&gt;&lt;/head&gt;&lt;body style=&quot; font-family:'Segoe UI'; font-size:9pt; font-weight:400; font-style:normal;&quot;&gt;
+&lt;p style=&quot; margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;&quot;&gt;&lt;span style=&quot; font-weight:700;&quot;&gt;[r]&lt;/span&gt;: Root folder name&lt;/p&gt;
+&lt;p style=&quot; margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;&quot;&gt;&lt;span style=&quot; font-weight:700;&quot;&gt;[s]&lt;/span&gt;: Sub folder name (if exists)&lt;/p&gt;
+&lt;p style=&quot; margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;&quot;&gt;&lt;span style=&quot; font-weight:700;&quot;&gt;[e]&lt;/span&gt;: File name extension&lt;/p&gt;
+&lt;p style=&quot; margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;&quot;&gt;&lt;span style=&quot; font-weight:700;&quot;&gt;[oc]&lt;/span&gt;: Original file name without numbers&lt;/p&gt;
+&lt;p style=&quot; margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;&quot;&gt;&lt;span style=&quot; font-weight:700;&quot;&gt;[c]&lt;/span&gt;: Custom name from custom input&lt;/p&gt;
+&lt;p style=&quot; margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;&quot;&gt;&lt;span style=&quot; font-weight:700;&quot;&gt;[o]&lt;/span&gt;: Original file name&lt;/p&gt;
+&lt;p style=&quot; margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;&quot;&gt;&lt;span style=&quot; font-weight:700;&quot;&gt;[n]&lt;/span&gt;: Image Number&lt;/p&gt;
+&lt;p style=&quot; margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;&quot;&gt;&lt;span style=&quot; font-weight:700;&quot;&gt;[/]&lt;/span&gt;: new folder layer&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
+             </property>
+            </widget>
+           </item>
+           <item>
+            <widget class="QLabel" name="label_21">
+             <property name="text">
+              <string>Output Path For Selected:</string>
+             </property>
+            </widget>
+           </item>
+           <item>
+            <widget class="QLabel" name="schemaOutputPathForSelectedLabel">
+             <property name="text">
+              <string>output_path</string>
+             </property>
+            </widget>
+           </item>
+          </layout>
          </widget>
+        </item>
+        <item row="4" column="0" colspan="2">
+         <spacer name="verticalSpacer_5">
+          <property name="orientation">
+           <enum>Qt::Vertical</enum>
+          </property>
+          <property name="sizeHint" stdset="0">
+           <size>
+            <width>20</width>
+            <height>40</height>
+           </size>
+          </property>
+         </spacer>
+        </item>
+        <item row="5" column="0" colspan="2">
+         <spacer name="verticalSpacer_6">
+          <property name="orientation">
+           <enum>Qt::Vertical</enum>
+          </property>
+          <property name="sizeHint" stdset="0">
+           <size>
+            <width>20</width>
+            <height>40</height>
+           </size>
+          </property>
+         </spacer>
         </item>
        </layout>
       </widget>
@@ -1039,7 +1287,7 @@
         <string>Image Editing</string>
        </attribute>
        <layout class="QGridLayout" name="gridLayout">
-        <item row="4" column="0" colspan="2">
+        <item row="5" column="0" colspan="2">
          <widget class="QLabel" name="label_17">
           <property name="maximumSize">
            <size>
@@ -1057,7 +1305,7 @@
           </property>
          </widget>
         </item>
-        <item row="5" column="1">
+        <item row="6" column="1">
          <widget class="QDoubleSpinBox" name="shadowAdjustmentDoubleSpinBox">
           <property name="minimum">
            <double>-1.000000000000000</double>
@@ -1070,21 +1318,21 @@
           </property>
          </widget>
         </item>
-        <item row="12" column="0" colspan="2">
+        <item row="13" column="0" colspan="2">
          <widget class="QSlider" name="sharpenHorizontalSlider">
           <property name="orientation">
            <enum>Qt::Horizontal</enum>
           </property>
          </widget>
         </item>
-        <item row="16" column="0" colspan="2">
+        <item row="17" column="0" colspan="2">
          <widget class="QPushButton" name="resetEditSettingsPushButton">
           <property name="text">
            <string>Reset</string>
           </property>
          </widget>
         </item>
-        <item row="3" column="0">
+        <item row="4" column="0">
          <widget class="QSlider" name="exposureAdjustmentSlider">
           <property name="minimum">
            <number>-50</number>
@@ -1100,14 +1348,14 @@
           </property>
          </widget>
         </item>
-        <item row="11" column="0">
+        <item row="12" column="0">
          <widget class="QCheckBox" name="sharpenImageCheckBox">
           <property name="text">
            <string>Sharpen</string>
           </property>
          </widget>
         </item>
-        <item row="7" column="1">
+        <item row="8" column="1">
          <widget class="QDoubleSpinBox" name="highlightAdjustmentDoubleSpinBox">
           <property name="minimum">
            <double>-1.000000000000000</double>
@@ -1120,10 +1368,23 @@
           </property>
          </widget>
         </item>
-        <item row="11" column="1">
+        <item row="12" column="1">
          <widget class="QDoubleSpinBox" name="sharpenDoubleSpinBox"/>
         </item>
-        <item row="0" column="0" colspan="2">
+        <item row="18" column="0" colspan="2">
+         <spacer name="verticalSpacer">
+          <property name="orientation">
+           <enum>Qt::Vertical</enum>
+          </property>
+          <property name="sizeHint" stdset="0">
+           <size>
+            <width>20</width>
+            <height>40</height>
+           </size>
+          </property>
+         </spacer>
+        </item>
+        <item row="1" column="0" colspan="2">
          <widget class="QGroupBox" name="groupBox">
           <property name="title">
            <string>White Balance</string>
@@ -1168,7 +1429,7 @@
           </layout>
          </widget>
         </item>
-        <item row="2" column="0" colspan="2">
+        <item row="3" column="0" colspan="2">
          <widget class="QLabel" name="label_10">
           <property name="maximumSize">
            <size>
@@ -1187,10 +1448,10 @@
           </property>
          </widget>
         </item>
-        <item row="8" column="1">
+        <item row="9" column="1">
          <widget class="QDoubleSpinBox" name="denoiseDoubleSpinBox"/>
         </item>
-        <item row="5" column="0">
+        <item row="6" column="0">
          <widget class="QSlider" name="shadowAdjustmentSlider">
           <property name="minimum">
            <number>-1000</number>
@@ -1203,14 +1464,14 @@
           </property>
          </widget>
         </item>
-        <item row="8" column="0">
+        <item row="9" column="0">
          <widget class="QCheckBox" name="denoiseImageCheckBox">
           <property name="text">
            <string>Denoise</string>
           </property>
          </widget>
         </item>
-        <item row="13" column="0" colspan="2">
+        <item row="14" column="0" colspan="2">
          <widget class="Line" name="line">
           <property name="sizePolicy">
            <sizepolicy hsizetype="Expanding" vsizetype="Fixed">
@@ -1229,7 +1490,7 @@
           </property>
          </widget>
         </item>
-        <item row="6" column="0" colspan="2">
+        <item row="7" column="0" colspan="2">
          <widget class="QLabel" name="label_18">
           <property name="maximumSize">
            <size>
@@ -1247,7 +1508,7 @@
           </property>
          </widget>
         </item>
-        <item row="7" column="0">
+        <item row="8" column="0">
          <widget class="QSlider" name="highlightAdjustmentSlider">
           <property name="minimum">
            <number>-1000</number>
@@ -1263,7 +1524,7 @@
           </property>
          </widget>
         </item>
-        <item row="3" column="1">
+        <item row="4" column="1">
          <widget class="QDoubleSpinBox" name="exposureAdjustmentDoubleSpinBox">
           <property name="minimum">
            <double>-5.000000000000000</double>
@@ -1276,25 +1537,100 @@
           </property>
          </widget>
         </item>
-        <item row="9" column="0" colspan="2">
+        <item row="10" column="0" colspan="2">
          <widget class="QSlider" name="denoiseHorizontalSlider">
           <property name="orientation">
            <enum>Qt::Horizontal</enum>
           </property>
          </widget>
         </item>
-        <item row="17" column="0" colspan="2">
-         <spacer name="verticalSpacer">
-          <property name="orientation">
-           <enum>Qt::Vertical</enum>
+        <item row="0" column="0" colspan="2">
+         <widget class="QGroupBox" name="groupBox_5">
+          <property name="title">
+           <string>Downsample Image</string>
           </property>
-          <property name="sizeHint" stdset="0">
-           <size>
-            <width>20</width>
-            <height>40</height>
-           </size>
-          </property>
-         </spacer>
+          <layout class="QGridLayout" name="gridLayout_4">
+           <item row="2" column="0">
+            <widget class="QLabel" name="label_9">
+             <property name="text">
+              <string>Target Mpx</string>
+             </property>
+            </widget>
+           </item>
+           <item row="0" column="0">
+            <widget class="QCheckBox" name="enableRescaleCheckBox">
+             <property name="text">
+              <string>Enable Downsample</string>
+             </property>
+            </widget>
+           </item>
+           <item row="4" column="0" colspan="3">
+            <widget class="QFrame" name="frame_2">
+             <property name="frameShape">
+              <enum>QFrame::StyledPanel</enum>
+             </property>
+             <property name="frameShadow">
+              <enum>QFrame::Raised</enum>
+             </property>
+             <layout class="QHBoxLayout" name="horizontalLayout_7">
+              <item>
+               <widget class="QSpinBox" name="xDimensionOutputSpinbox"/>
+              </item>
+              <item>
+               <widget class="QLabel" name="label_19">
+                <property name="text">
+                 <string>by</string>
+                </property>
+                <property name="alignment">
+                 <set>Qt::AlignCenter</set>
+                </property>
+               </widget>
+              </item>
+              <item>
+               <widget class="QSpinBox" name="yDiemnsionOutputSpinbox"/>
+              </item>
+             </layout>
+            </widget>
+           </item>
+           <item row="1" column="2">
+            <widget class="QDoubleSpinBox" name="targetDownsamplePercentDoubleSpinbox">
+             <property name="suffix">
+              <string>%</string>
+             </property>
+             <property name="maximum">
+              <double>100.000000000000000</double>
+             </property>
+             <property name="value">
+              <double>100.000000000000000</double>
+             </property>
+            </widget>
+           </item>
+           <item row="1" column="0">
+            <widget class="QLabel" name="label_11">
+             <property name="text">
+              <string>Target Percent</string>
+             </property>
+            </widget>
+           </item>
+           <item row="2" column="2">
+            <widget class="QDoubleSpinBox" name="targetDownsampleMpxDoubleSpinBox">
+             <property name="suffix">
+              <string>mp</string>
+             </property>
+            </widget>
+           </item>
+           <item row="3" column="0" colspan="3">
+            <widget class="QLabel" name="label_20">
+             <property name="text">
+              <string>Selected Images Output Dimensions</string>
+             </property>
+             <property name="alignment">
+              <set>Qt::AlignCenter</set>
+             </property>
+            </widget>
+           </item>
+          </layout>
+         </widget>
         </item>
        </layout>
       </widget>

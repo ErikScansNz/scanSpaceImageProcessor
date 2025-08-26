@@ -13,6 +13,7 @@ Functions include:
 
 import functools
 import gc
+import os
 
 import colour
 import numpy as np
@@ -892,3 +893,243 @@ class ChartTools:
                 scene.addItem(label)
                 
         return swatch_rects  # list of QRect for each swatch, row-wise
+    
+    @staticmethod
+    def get_current_chart_assignment(main_window):
+        """
+        Get the currently assigned chart for the selected image or its group.
+        
+        Args:
+            main_window: Reference to the main application window
+            
+        Returns:
+            tuple: (chart_path, source_type) where source_type is 'image' or 'group' or None if no chart found
+        """
+        selected_item = main_window.ui.imagesListWidget.currentItem()
+        if not selected_item:
+            return None, None
+            
+        selected_meta = selected_item.data(Qt.UserRole)
+        
+        # Skip group headers
+        if selected_meta.get('is_group_header', False):
+            return None, None
+            
+        # First check if this specific image has a chart assigned in userData
+        if selected_meta.get('chart', False):
+            return selected_meta['input_path'], 'image'
+            
+        # If not, check if the group has a chart assigned
+        group_name = selected_meta.get('group_name', 'All Images')
+        for chart_path, chart_group in main_window.chart_groups:
+            if chart_group == group_name:
+                return chart_path, 'group'
+                
+        return None, None
+    
+    @staticmethod 
+    def copy_chart_assignment(main_window):
+        """
+        Copy the currently selected image's chart assignment to clipboard.
+        
+        Args:
+            main_window: Reference to the main application window
+        """
+        chart_path, source_type = ChartTools.get_current_chart_assignment(main_window)
+        
+        if chart_path:
+            main_window.copied_chart_assignment = chart_path
+            source_desc = "image" if source_type == 'image' else "group"
+            main_window.log(f"[Copy Chart] Copied chart assignment from {source_desc}: {os.path.basename(chart_path)}")
+        else:
+            main_window.log("[Copy Chart] No chart assignment found for selected image or its group")
+            main_window.copied_chart_assignment = None
+    
+    @staticmethod
+    def paste_chart_assignment(main_window):
+        """
+        Paste the copied chart assignment to the currently selected group.
+        
+        Args:
+            main_window: Reference to the main application window
+        """
+        if not hasattr(main_window, 'copied_chart_assignment') or not main_window.copied_chart_assignment:
+            main_window.log("[Paste Chart] No chart assignment copied")
+            return
+            
+        selected_item = main_window.ui.imagesListWidget.currentItem()
+        if not selected_item:
+            main_window.log("[Paste Chart] No image selected")
+            return
+            
+        selected_meta = selected_item.data(Qt.UserRole)
+        
+        # Skip group headers
+        if selected_meta.get('is_group_header', False):
+            main_window.log("[Paste Chart] Cannot paste chart to group header")
+            return
+            
+        chart_path = main_window.copied_chart_assignment
+        selected_group = selected_meta.get('group_name', 'All Images')
+        
+        # Remove any existing chart assignment for this group
+        existing_chart = None
+        for chart_info in main_window.chart_groups:
+            if chart_info[1] == selected_group:  # Same group
+                existing_chart = chart_info[0]
+                break
+        
+        # Clear the existing chart flag from the previous chart in this group
+        if existing_chart:
+            for i in range(main_window.ui.imagesListWidget.count()):
+                item = main_window.ui.imagesListWidget.item(i)
+                meta = item.data(Qt.UserRole)
+                
+                # Skip group headers
+                if meta.get('is_group_header', False):
+                    continue
+                
+                # Clear chart flag from previous chart in this group
+                if meta.get('input_path') == existing_chart and meta.get('group_name', 'All Images') == selected_group:
+                    meta['chart'] = False
+                    meta.pop('debug_images', None)
+                    item.setData(Qt.UserRole, meta)
+                    item.setBackground(QColor('white'))
+                    break
+            
+            # Remove from chart_groups list
+            main_window.chart_groups = [[c, g] for c, g in main_window.chart_groups if not (c == existing_chart and g == selected_group)]
+
+        # Add the copied chart to this group
+        main_window.chart_groups.append([chart_path, selected_group])
+        
+        # Update UI to show group context
+        main_window.ui.chartPathLineEdit.setText(f"[{selected_group}] {os.path.basename(chart_path)}")
+        main_window.log(f"[Paste Chart] Chart pasted to group '{selected_group}': {os.path.basename(chart_path)}")
+        
+        # Store group information for calibration
+        main_window.current_chart_group = selected_group
+    
+    @staticmethod
+    def use_selected_chart_for_all_groups(main_window):
+        """
+        Take the current chart assignment and assign it to all other groups.
+        
+        Args:
+            main_window: Reference to the main application window
+        """
+        chart_path, source_type = ChartTools.get_current_chart_assignment(main_window)
+        
+        if not chart_path:
+            main_window.log("[Use Chart For All] No chart assignment found for selected image or its group")
+            return
+            
+        selected_item = main_window.ui.imagesListWidget.currentItem()
+        if not selected_item:
+            return
+            
+        current_group = selected_item.data(Qt.UserRole).get('group_name', 'All Images')
+        
+        # Get all unique groups from the image list
+        all_groups = set()
+        for i in range(main_window.ui.imagesListWidget.count()):
+            item = main_window.ui.imagesListWidget.item(i)
+            meta = item.data(Qt.UserRole)
+            if not meta.get('is_group_header', False):
+                group_name = meta.get('group_name', 'All Images')
+                all_groups.add(group_name)
+        
+        # Remove chart assignments from all groups first
+        for group_name in all_groups:
+            if group_name == current_group:
+                continue  # Skip current group
+                
+            # Find existing chart for this group and remove it
+            existing_chart = None
+            for chart_info in main_window.chart_groups:
+                if chart_info[1] == group_name:
+                    existing_chart = chart_info[0]
+                    break
+            
+            if existing_chart:
+                # Clear chart flags from items in this group
+                for i in range(main_window.ui.imagesListWidget.count()):
+                    item = main_window.ui.imagesListWidget.item(i)
+                    meta = item.data(Qt.UserRole)
+                    
+                    if (meta.get('is_group_header', False) or 
+                        meta.get('group_name', 'All Images') != group_name):
+                        continue
+                    
+                    # Clear chart flag if this was the chart image
+                    if meta.get('input_path') == existing_chart:
+                        meta['chart'] = False
+                        meta.pop('debug_images', None)
+                        item.setData(Qt.UserRole, meta)
+                        item.setBackground(QColor('white'))
+                
+                # Remove from chart_groups list
+                main_window.chart_groups = [[c, g] for c, g in main_window.chart_groups if not (c == existing_chart and g == group_name)]
+        
+        # Now add the current chart to all other groups
+        groups_updated = 0
+        for group_name in all_groups:
+            if group_name == current_group:
+                continue  # Skip current group
+                
+            main_window.chart_groups.append([chart_path, group_name])
+            groups_updated += 1
+        
+        main_window.log(f"[Use Chart For All] Applied chart '{os.path.basename(chart_path)}' to {groups_updated} other groups")
+    
+    @staticmethod
+    def remove_selected_chart_assignment(main_window):
+        """
+        Remove chart assignment from the selected image and its group.
+        
+        Args:
+            main_window: Reference to the main application window
+        """
+        selected_item = main_window.ui.imagesListWidget.currentItem()
+        if not selected_item:
+            main_window.log("[Remove Chart] No image selected")
+            return
+            
+        selected_meta = selected_item.data(Qt.UserRole)
+        
+        # Skip group headers
+        if selected_meta.get('is_group_header', False):
+            main_window.log("[Remove Chart] Cannot remove chart from group header")
+            return
+            
+        group_name = selected_meta.get('group_name', 'All Images')
+        image_path = selected_meta['input_path']
+        
+        # Clear chart assignment from the selected image
+        if selected_meta.get('chart', False):
+            selected_meta['chart'] = False
+            selected_meta.pop('debug_images', None)
+            selected_item.setData(Qt.UserRole, selected_meta)
+            selected_item.setBackground(QColor('white'))
+            main_window.log(f"[Remove Chart] Removed chart flag from image: {os.path.basename(image_path)}")
+        
+        # Find and remove group chart assignment
+        existing_chart = None
+        for chart_info in main_window.chart_groups:
+            if chart_info[1] == group_name:
+                existing_chart = chart_info[0]
+                break
+        
+        if existing_chart:
+            # Remove from chart_groups list
+            main_window.chart_groups = [[c, g] for c, g in main_window.chart_groups if not (c == existing_chart and g == group_name)]
+            main_window.log(f"[Remove Chart] Removed group chart assignment for '{group_name}': {os.path.basename(existing_chart)}")
+            
+            # Clear chart path display if it was showing this group's chart
+            current_chart_text = main_window.ui.chartPathLineEdit.text()
+            if current_chart_text.startswith(f'[{group_name}]'):
+                main_window.ui.chartPathLineEdit.clear()
+        
+        # Clear current chart group if it matches
+        if hasattr(main_window, 'current_chart_group') and main_window.current_chart_group == group_name:
+            main_window.current_chart_group = None

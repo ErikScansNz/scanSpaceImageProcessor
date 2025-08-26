@@ -365,7 +365,7 @@ class Ui_ImageProcessorSettings(object):
 #endif // QT_CONFIG(tooltip)
         self.bitDepth16EnableCheckbox.setText(QCoreApplication.translate("ImageProcessorSettings", u"16 Bit Default", None))
 #if QT_CONFIG(tooltip)
-        self.enableDarkThemeCheckbox.setToolTip(QCoreApplication.translate("ImageProcessorSettings", u"Enables experimental features. WARNING THIS MAY PRODUCE UNWANTED RESULTS", None))
+        self.enableDarkThemeCheckbox.setToolTip("")
 #endif // QT_CONFIG(tooltip)
         self.enableDarkThemeCheckbox.setText(QCoreApplication.translate("ImageProcessorSettings", u"Dark Theme", None))
         self.usePrecalculatedChartsCheckBox.setText(QCoreApplication.translate("ImageProcessorSettings", u"Use Precalculated Charts", None))

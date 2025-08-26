@@ -6,6 +6,7 @@
 import os
 import time
 import webbrowser
+from functools import partial
 
 import cv2
 import numpy as np
@@ -29,6 +30,7 @@ from PySide6.QtGui import QColor, QPixmap, QImage, QPainter, QIcon, QCursor, QTr
 
 from interface.scanspaceImageProcessor_UI import Ui_MainWindow
 from interface.settings_UI import Ui_ImageProcessorSettings
+from resource_path import get_main_icon, get_icon_path, list_available_resources
 from ImageProcessor.imageProcessorWorker import ImageCorrectionWorker
 from ImageProcessor.chartTools import ChartTools
 from ImageProcessor.imageLoader import ImageLoader, RawLoadWorker
@@ -36,6 +38,13 @@ from ImageProcessor.fileNamingSchema import FileNamingSchema
 from ImageProcessor.serverClient import ServerConnectionError, ServerAPIError
 from ImageProcessor.editingTools import apply_all_adjustments
 from ImageProcessor.themes import theme_manager
+from ImageProcessor.function_tools import (
+    export_current_project, send_project_to_server, update_server_status_label,
+    _show_submission_confirmation_dialog, _build_submission_details, 
+    _on_submission_progress, _on_submission_success, _on_submission_error, 
+    _on_submission_finished, _build_project_data, _sanitize_project_data,
+    _debug_find_unserializable_objects, ProjectSubmissionWorker
+)
 
 # Logging system
 from enum import IntEnum
@@ -640,8 +649,22 @@ class MainWindow(QMainWindow):
         if outf:
             self.ui.outputDirectoryLineEdit.setText(outf)
 
-        # Initialize server status
-        self.update_server_status_label("Ready to send jobs")
+        self.dark_mode = self.settings.value('dark_mode', False, type=bool)
+
+        # Bind imported functions as methods using functools.partial
+        self.export_current_project = partial(export_current_project, self)
+        self.update_server_status_label = partial(update_server_status_label, self)
+        self.send_project_to_server = partial(send_project_to_server, self)
+        self._show_submission_confirmation_dialog = partial(_show_submission_confirmation_dialog, self)
+        self._build_submission_details = partial(_build_submission_details, self)
+        self._on_submission_progress = partial(_on_submission_progress, self)
+        self._on_submission_success = partial(_on_submission_success, self)
+        self._on_submission_error = partial(_on_submission_error, self)
+        self._on_submission_finished = partial(_on_submission_finished, self)
+        self._build_project_data = partial(_build_project_data, self)
+        self._sanitize_project_data = partial(_sanitize_project_data, self)
+        self._debug_find_unserializable_objects = partial(_debug_find_unserializable_objects, self)
+        self.ProjectSubmissionWorker = ProjectSubmissionWorker
 
         # ────────────────────────────────────────────────────────────
         # 3) Preview Scene
@@ -736,6 +759,13 @@ class MainWindow(QMainWindow):
         self.thumbnail_cache        = {}
         self.image_metadata_map     = {}
         self.correct_thumbnails = False
+        
+        # Thumbnail view state
+        self.ui.thumbnailContainerScrollArea.hide()
+        self.is_thumbnail_view_mode = False
+        self.thumbnail_zoom_level = 3  # Default number of columns (1-6 range, matches slider default)
+        self.thumbnail_grid_widget = None  # Grid widget for thumbnails
+        self.thumbnail_grid_layout = None  # Grid layout for thumbnails
 
         # UI helpers
         self.instruction_label      = None
@@ -760,6 +790,9 @@ class MainWindow(QMainWindow):
 
         self.supported_chart_types = ["Colour Checker Classic", "Colour Checker Passport"]
         self.selected_chart_type = None
+
+        # Initialize server status
+        self.update_server_status_label("Ready to send jobs")
         
         # ────────────────────────────────────────────────────────────
         # 6) Real-time Preview System
@@ -840,6 +873,12 @@ class MainWindow(QMainWindow):
 
         ui.setSelectedAsChartPushbutton.clicked.connect(self.set_selected_as_chart)
         ui.processImagesPushbutton.clicked.connect(self.process_images_button_clicked)
+        
+        # Chart management buttons
+        ui.copyChartPushbutton.clicked.connect(lambda: ChartTools.copy_chart_assignment(self))
+        ui.pasteChartPushbutton.clicked.connect(lambda: ChartTools.paste_chart_assignment(self))
+        ui.useSelectedChartForAllGroupsPushbutton.clicked.connect(lambda: ChartTools.use_selected_chart_for_all_groups(self))
+        ui.removeSelectedChartPushbutton.clicked.connect(lambda: ChartTools.remove_selected_chart_assignment(self))
 
         ui.imagesListWidget.itemSelectionChanged.connect(self.preview_selected)
         ui.imagesListWidget.currentRowChanged.connect(self.update_thumbnail_strip)
@@ -916,6 +955,12 @@ class MainWindow(QMainWindow):
         self.ui.actionLoadSettingsMenu.triggered.connect(self.open_settings_dialog)
 
         # ────────────────────────────────────────────────────────────
+        # Thumbnail Grid View Controls
+        # ────────────────────────────────────────────────────────────
+        ui.displayImagesAsThumbnailsCheckBox.toggled.connect(self.toggle_thumbnail_view_mode)
+        ui.thumbnailZoomLevelHorizontalSlider.valueChanged.connect(self.update_thumbnail_zoom_level)
+
+        # ────────────────────────────────────────────────────────────
         # 9) Event Filters & Focus
         # ────────────────────────────────────────────────────────────
         self.setFocusPolicy(Qt.StrongFocus)
@@ -934,12 +979,17 @@ class MainWindow(QMainWindow):
         # Load and apply settings from INI file
         self.apply_settings()
         
+        # Set up file naming schema controls
+        from ImageProcessor.fileNamingSchema import FileNamingSchema
+        self.file_naming_schema = FileNamingSchema()
+        self.file_naming_schema.setup_ui_controls(self)
+
         # Connect quit action if it exists
         if hasattr(self.ui, 'actionQuit'):
             self.ui.actionQuit.triggered.connect(self.close)
             # Add keyboard shortcut for quit (Cmd+Q on Mac, Ctrl+Q on others)
             self.ui.actionQuit.setShortcut(QKeySequence.StandardKey.Quit)
-    
+
     def switch_theme(self, theme_name):
         """Switch to the specified theme."""
         # Apply theme
@@ -1057,7 +1107,7 @@ class MainWindow(QMainWindow):
             self.switch_theme('light')
         
         self.log_info("[Settings] Settings applied successfully")
-    
+
     def closeEvent(self, event):
         """Handle application close event - clean shutdown."""
         # Stop any running timers
@@ -1065,19 +1115,19 @@ class MainWindow(QMainWindow):
             self.cpuTimer.stop()
         if hasattr(self, 'raw_load_timer'):
             self.raw_load_timer.stop()
-        
+
         # Clean up thread pool
         if hasattr(self, 'threadpool'):
             self.threadpool.waitForDone(1000)  # Wait max 1 second for threads
-        
+
         # Save window state/geometry if needed
         if hasattr(self, 'settings'):
             # You could save window geometry here if desired
             pass
-        
+
         # Accept the close event
         event.accept()
-        
+
         # Ensure application quits
         QApplication.instance().quit()
 
@@ -1256,929 +1306,6 @@ class MainWindow(QMainWindow):
                     f"Failed to export chart configuration:\n{str(e)}"
                 )
 
-    def export_current_project(self):
-        """
-        Export the current project configuration to a JSON file.
-        
-        This creates a comprehensive project file containing all image paths,
-        settings, chart configurations, and metadata for batch processing.
-        """
-        # Check if we have any images to export
-        if not hasattr(self, 'ui') or self.ui.imagesListWidget.count() == 0:
-            from PySide6.QtWidgets import QMessageBox
-            QMessageBox.warning(
-                self,
-                "No Images",
-                "No images available to export. Please load images first."
-            )
-            return
-        
-        # Open file save dialog
-        file_dialog = QFileDialog(self)
-        file_dialog.setAcceptMode(QFileDialog.AcceptSave)
-        file_dialog.setNameFilter("Project files (*.json)")
-        file_dialog.setDefaultSuffix("json")
-        file_dialog.setWindowTitle("Export Current Project")
-        
-        # Set default filename with current date
-        from datetime import datetime
-        default_name = f"ScanSpace_Project_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
-        file_dialog.selectFile(default_name)
-        
-        if file_dialog.exec() == QFileDialog.Accepted:
-            file_path = file_dialog.selectedFiles()[0]
-            
-            try:
-                project_data = self._build_project_data()
-                
-                # Sanitize the project data to remove emojis and non-standard characters
-                sanitized_data = self._sanitize_project_data(project_data)
-                
-                # Write JSON file with pretty formatting
-                import json
-                with open(file_path, 'w', encoding='utf-8') as f:
-                    json.dump(sanitized_data, f, indent=2, ensure_ascii=True)
-                
-                self.log_info(f"[Project] Project exported to: {file_path}")
-                
-                from PySide6.QtWidgets import QMessageBox
-                QMessageBox.information(
-                    self,
-                    "Export Successful", 
-                    f"Project exported successfully to:\n{file_path}\n\n"
-                    f"Images: {len(project_data.get('images', []))}\n"
-                    f"Groups: {len(project_data.get('image_groups', {}))}"
-                )
-                
-            except Exception as e:
-                self.log_error(f"[Project] Error exporting project: {e}")
-                from PySide6.QtWidgets import QMessageBox
-                QMessageBox.critical(
-                    self,
-                    "Export Error",
-                    f"Failed to export project:\n{str(e)}"
-                )
-
-    class ProjectSubmissionWorker(QRunnable):
-        """Worker thread for sending project data to server without blocking UI."""
-        
-        class Signals(QObject):
-            progress = Signal(str)  # Progress message
-            error = Signal(str)     # Error message
-            success = Signal(dict)  # Success with response data
-            finished = Signal()     # Finished signal
-        
-        def __init__(self, main_window, host, port, project_data, image_count):
-            super().__init__()
-            self.main_window = main_window
-            self.host = host
-            self.port = port
-            self.project_data = project_data
-            self.image_count = image_count
-            self.signals = self.Signals()
-        
-        @Slot()
-        def run(self):
-            """Execute the project submission in background thread."""
-            try:
-                import json
-                import urllib.request
-                import urllib.error
-                import tempfile
-                import os
-                
-                # Update progress
-                self.signals.progress.emit("Serializing project data...")
-                
-                # Try to serialize and catch any numpy array issues
-                try:
-                    json_string = json.dumps(self.project_data, indent=2)
-                    json_data = json_string.encode('utf-8')
-                    
-                    # Save to temp file for debugging
-                    temp_file = tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False, prefix='project_debug_')
-                    temp_file.write(json_string)
-                    temp_file.close()
-                    
-                except TypeError as e:
-                    self.signals.error.emit(f"JSON serialization error: {e}")
-                    return
-                
-                # Update progress
-                self.signals.progress.emit(f"Connecting to server {self.host}:{self.port}...")
-                
-                # Prepare HTTP request to standalone server API
-                api_url = f"http://{self.host}:{self.port}/api/jobs/submit"
-                
-                # Create HTTP request
-                req = urllib.request.Request(
-                    api_url,
-                    data=json_data,
-                    headers={
-                        'Content-Type': 'application/json',
-                        'Content-Length': str(len(json_data))
-                    },
-                    method='POST'
-                )
-                
-                # Update progress
-                self.signals.progress.emit(f"Sending {self.image_count} images to server...")
-                
-                # Send request with timeout
-                try:
-                    with urllib.request.urlopen(req, timeout=30) as response:
-                        response_data = json.loads(response.read().decode('utf-8'))
-                    
-                    # Success
-                    self.signals.success.emit({
-                        'response': response_data,
-                        'image_count': self.image_count,
-                        'host': self.host,
-                        'port': self.port
-                    })
-                    
-                except urllib.error.HTTPError as http_err:
-                    error_msg = f"HTTP {http_err.code}: {http_err.reason}"
-                    try:
-                        # Try to get detailed error from server response
-                        error_response = http_err.read().decode('utf-8')
-                        if error_response:
-                            try:
-                                error_details = json.loads(error_response)
-                                error_msg += f" - {error_details.get('error', error_response)}"
-                            except json.JSONDecodeError:
-                                error_msg += f" - {error_response}"
-                    except:
-                        pass
-                    self.signals.error.emit(error_msg)
-                    
-                except urllib.error.URLError as url_err:
-                    self.signals.error.emit(f"Failed to connect to server: {url_err.reason}")
-                    
-                except json.JSONDecodeError:
-                    self.signals.error.emit("Invalid response from server")
-                    
-                except Exception as e:
-                    self.signals.error.emit(f"Network error: {str(e)}")
-                
-            except Exception as e:
-                self.signals.error.emit(f"Unexpected error: {str(e)}")
-            finally:
-                self.signals.finished.emit()
-
-    def send_project_to_server(self):
-        """
-        Send the current project to an external processing server for distributed processing.
-        Shows a progress dialog and runs the submission in a background thread.
-        """
-        # Check if we have any images to send
-        if not hasattr(self, 'ui') or self.ui.imagesListWidget.count() == 0:
-            from PySide6.QtWidgets import QMessageBox
-            QMessageBox.warning(
-                self,
-                "No Images",
-                "No images available to send. Please load images first."
-            )
-            return
-            
-        # Get server address from settings
-        settings = QSettings('ScanSpace', 'ImageProcessor')
-        server_address = settings.value('host_server_address', '', type=str)
-        
-        if not server_address:
-            from PySide6.QtWidgets import QMessageBox
-            QMessageBox.warning(
-                self,
-                "No Server Address",
-                "Please configure the server address in Settings first."
-            )
-            return
-            
-        # Parse host and port  
-        try:
-            if ':' in server_address:
-                host, port = server_address.split(':', 1)
-                port = int(port)
-            else:
-                host = server_address
-                port = 8889  # Default API port for standalone server
-        except ValueError:
-            from PySide6.QtWidgets import QMessageBox
-            QMessageBox.warning(
-                self,
-                "Invalid Server Address",
-                "Server address must be in format 'host:port' or just 'host' (default API port 8889)."
-            )
-            return
-        
-        try:
-            # Show submission confirmation dialog before proceeding
-            if not self._show_submission_confirmation_dialog(host, port):
-                return  # User cancelled
-            
-            # Update status
-            self.update_server_status_label("Preparing project data...")
-            
-            # Build and sanitize project data using existing function
-            project_data = self._build_project_data()
-            if project_data is None:  # Check if _build_project_data returned None (error)
-                return
-                
-            sanitized_data = self._sanitize_project_data(project_data)
-            
-            # Count actual images (not group headers)
-            image_count = 0
-            for i, image in enumerate(sanitized_data.get('images', [])):
-                try:
-                    # Check if this is a group header using the metadata field
-                    metadata = image.get('metadata', {})
-                    if not metadata.get('is_group_header', False) and image.get('full_path'):
-                        image_count += 1
-                except Exception as e:
-                    self.log_error(f"Error processing image {i}: {e}")
-                    continue
-            
-            if image_count == 0:
-                self.update_server_status_label("No images to process")
-                from PySide6.QtWidgets import QMessageBox
-                QMessageBox.warning(
-                    self,
-                    "No Images",
-                    "No processable images found. Please load images first."
-                )
-                return
-            
-            # Create and show progress dialog
-            from PySide6.QtWidgets import QProgressDialog, QPushButton
-            self.progress_dialog = QProgressDialog(
-                "Preparing to send project to server...", 
-                "Cancel", 
-                0, 0, 
-                self
-            )
-            self.progress_dialog.setWindowTitle("Sending Project to Server")
-            self.progress_dialog.setModal(True)
-            self.progress_dialog.setMinimumDuration(0)
-            self.progress_dialog.setWindowFlags(self.progress_dialog.windowFlags() & ~Qt.WindowCloseButtonHint)
-            
-            # Create custom cancel button that actually works
-            cancel_button = QPushButton("Cancel")
-            self.progress_dialog.setCancelButton(cancel_button)
-            
-            # Show the dialog
-            self.progress_dialog.show()
-            
-            # Create and start worker thread
-            self.submission_worker = self.ProjectSubmissionWorker(
-                self, host, port, sanitized_data, image_count
-            )
-            
-            # Connect signals
-            self.submission_worker.signals.progress.connect(self._on_submission_progress)
-            self.submission_worker.signals.success.connect(self._on_submission_success)
-            self.submission_worker.signals.error.connect(self._on_submission_error)
-            self.submission_worker.signals.finished.connect(self._on_submission_finished)
-            
-            # Start the worker
-            QThreadPool.globalInstance().start(self.submission_worker)
-            
-        except Exception as e:
-            self.update_server_status_label("Send failed - Ready to retry")
-            self.log_error(f"[Server] Error preparing to send jobs to server: {e}")
-            from PySide6.QtWidgets import QMessageBox
-            QMessageBox.critical(
-                self,
-                "Preparation Error",
-                f"Failed to prepare project for sending:\n{str(e)}"
-            )
-    
-    def _show_submission_confirmation_dialog(self, host, port):
-        """
-        Show a confirmation dialog with submission settings before sending to server.
-        
-        Args:
-            host: Server host address
-            port: Server port
-            
-        Returns:
-            bool: True if user confirmed submission, False if cancelled
-        """
-        from PySide6.QtWidgets import QDialog, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QTextEdit, QFrame
-        from PySide6.QtCore import Qt
-        from PySide6.QtGui import QFont
-        
-        # Create dialog
-        dialog = QDialog(self)
-        dialog.setWindowTitle("Confirm Project Submission")
-        dialog.setModal(True)
-        dialog.setFixedSize(600, 500)
-        
-        layout = QVBoxLayout(dialog)
-        
-        # Title
-        title_label = QLabel("Project Submission Confirmation")
-        title_font = QFont()
-        title_font.setPointSize(14)
-        title_font.setBold(True)
-        title_label.setFont(title_font)
-        title_label.setAlignment(Qt.AlignCenter)
-        layout.addWidget(title_label)
-        
-        # Separator
-        separator = QFrame()
-        separator.setFrameShape(QFrame.HLine)
-        separator.setFrameShadow(QFrame.Sunken)
-        layout.addWidget(separator)
-        
-        # Create submission details
-        details_text = self._build_submission_details(host, port)
-        
-        # Details text area
-        details_edit = QTextEdit()
-        details_edit.setPlainText(details_text)
-        details_edit.setReadOnly(True)
-        details_edit.setFont(QFont("Consolas", 9))  # Monospace font
-        layout.addWidget(details_edit)
-        
-        # Warning label
-        warning_label = QLabel("⚠️ Verify the settings above before proceeding. This will send your project to the server for processing.")
-        warning_label.setWordWrap(True)
-        warning_label.setStyleSheet("color: #f57c00; font-weight: bold; padding: 10px; background-color: #fff3e0; border-radius: 5px;")
-        layout.addWidget(warning_label)
-        
-        # Buttons
-        button_layout = QHBoxLayout()
-        
-        cancel_btn = QPushButton("Cancel")
-        cancel_btn.clicked.connect(dialog.reject)
-        button_layout.addWidget(cancel_btn)
-        
-        button_layout.addStretch()
-        
-        send_btn = QPushButton("Send to Server")
-        send_btn.clicked.connect(dialog.accept)
-        send_btn.setStyleSheet("QPushButton { background-color: #4CAF50; color: white; font-weight: bold; padding: 8px 16px; }")
-        send_btn.setDefault(True)
-        button_layout.addWidget(send_btn)
-        
-        layout.addLayout(button_layout)
-        
-        # Show dialog and return result
-        return dialog.exec() == QDialog.Accepted
-    
-    def _build_submission_details(self, host, port):
-        """
-        Build detailed submission information for the confirmation dialog.
-        
-        Args:
-            host: Server host address
-            port: Server port
-            
-        Returns:
-            str: Formatted submission details
-        """
-        # Get input and output paths
-        input_path = self.ui.rawImagesDirectoryLineEdit.text().strip()
-        output_path = self.ui.outputDirectoryLineEdit.text().strip()
-        
-        # Get image format and settings
-        image_format = self.ui.imageFormatComboBox.currentText()
-        
-        # Determine bit depth
-        bit_depth = "16-bit" if hasattr(self.ui, 'sixteenBitRadioButton') and self.ui.sixteenBitRadioButton.isChecked() else "8-bit"
-        
-        # Count images and groups
-        image_count = 0
-        group_count = 0
-        groups = set()
-        
-        for i in range(self.ui.imagesListWidget.count()):
-            item = self.ui.imagesListWidget.item(i)
-            metadata = item.data(Qt.UserRole)
-            
-            if metadata.get('is_group_header', False):
-                group_count += 1
-            else:
-                image_count += 1
-                group_name = metadata.get('group_name', 'All Images')
-                groups.add(group_name)
-        
-        # Get image adjustments
-        adjustments = []
-        
-        # Exposure adjustments
-        exposure = self.ui.exposureAdjustmentDoubleSpinBox.value()
-        if exposure != 0:
-            adjustments.append(f"Exposure: {exposure:+.1f} EV")
-        
-        shadows = self.ui.shadowAdjustmentDoubleSpinBox.value()
-        if shadows != 0:
-            adjustments.append(f"Shadows: {shadows:+.3f}")
-        
-        highlights = self.ui.highlightAdjustmentDoubleSpinBox.value()
-        if highlights != 0:
-            adjustments.append(f"Highlights: {highlights:+.3f}")
-        
-        # White balance
-        if self.ui.enableWhiteBalanceCheckBox.isChecked():
-            wb_temp = self.ui.whitebalanceSpinbox.value()
-            adjustments.append(f"White Balance: {wb_temp}K")
-        
-        # Denoise
-        if self.ui.denoiseImageCheckBox.isChecked():
-            denoise_strength = self.ui.denoiseDoubleSpinBox.value()
-            adjustments.append(f"Denoise: {denoise_strength:.0f}%")
-        
-        # Sharpen
-        if self.ui.sharpenImageCheckBox.isChecked():
-            sharpen_amount = self.ui.sharpenDoubleSpinBox.value()
-            adjustments.append(f"Sharpen: {sharpen_amount:.0f}%")
-        
-        # Build the details string
-        details = f"""SERVER INFORMATION:
-Host: {host}
-Port: {port}
-
-INPUT/OUTPUT PATHS:
-Input Path: {input_path}
-Output Path: {output_path}
-
-IMAGE SETTINGS:
-Format: {image_format}
-Bit Depth: {bit_depth}
-
-PROJECT STATISTICS:
-Image Groups: {len(groups)}
-Total Images: {image_count}
-
-IMAGE GROUPS:
-{chr(10).join([f"  • {group}" for group in sorted(groups)])}
-
-IMAGE ADJUSTMENTS:"""
-        
-        if adjustments:
-            details += f"\n{chr(10).join([f'  • {adj}' for adj in adjustments])}"
-        else:
-            details += "\n  • None (using chart-based color correction only)"
-        
-        # Add calibration information
-        if hasattr(self, 'group_calibrations') and self.group_calibrations:
-            details += f"\n\nCOLOR CALIBRATION:\n  • Group-specific calibrations: {len(self.group_calibrations)} groups"
-        elif hasattr(self, 'chart_swatches') and self.chart_swatches is not None:
-            details += f"\n\nCOLOR CALIBRATION:\n  • Global chart calibration available"
-        else:
-            details += f"\n\nCOLOR CALIBRATION:\n  • No calibration data found"
-        
-        return details
-    
-    @Slot(str)
-    def _on_submission_progress(self, message):
-        """Handle progress updates from the submission worker."""
-        if hasattr(self, 'progress_dialog') and self.progress_dialog:
-            self.progress_dialog.setLabelText(message)
-            self.update_server_status_label(message)
-    
-    @Slot(dict)
-    def _on_submission_success(self, result):
-        """Handle successful submission."""
-        response_data = result['response']
-        image_count = result['image_count']
-        host = result['host']
-        port = result['port']
-        
-        jobs_created = response_data.get('jobs_created', 0)
-        
-        self.log_info(f"[Server] Successfully submitted project with {image_count} images to {host}:{port}")
-        self.log_info(f"[Server] Server response: {response_data.get('message', 'Job submitted')}")
-        
-        self.update_server_status_label(f"Sent project ({jobs_created} jobs created) - Ready for more")
-        
-        from PySide6.QtWidgets import QMessageBox
-        QMessageBox.information(
-            self,
-            "Project Sent Successfully", 
-            f"Successfully submitted project to server!\n\n"
-            f"Server: {host}:{port}\n"
-            f"Images processed: {image_count}\n"
-            f"Jobs created: {jobs_created}\n\n"
-            f"Jobs will be distributed to connected processing clients."
-        )
-    
-    @Slot(str)
-    def _on_submission_error(self, error_message):
-        """Handle submission error."""
-        self.update_server_status_label("Send failed - Ready to retry")
-        self.log_error(f"[Server] Error sending jobs to server: {error_message}")
-        
-        from PySide6.QtWidgets import QMessageBox
-        QMessageBox.critical(
-            self,
-            "Send Error",
-            f"Failed to send jobs to server:\n{error_message}"
-        )
-    
-    @Slot()
-    def _on_submission_finished(self):
-        """Handle submission completion (success or error)."""
-        if hasattr(self, 'progress_dialog') and self.progress_dialog:
-            self.progress_dialog.close()
-            self.progress_dialog = None
-
-
-    def update_server_status_label(self, status):
-        """Update the server status label with current status and clickable web link."""
-        if hasattr(self, 'ui') and hasattr(self.ui, 'serverStatusLabel'):
-            # Get server address from settings
-            settings = QSettings('ScanSpace', 'ImageProcessor')
-            server_address = settings.value('standalone_server_host', 'localhost', type=str)
-            
-            # Determine the web interface URL
-            if ':' in server_address:
-                # If address already has port, extract host and use default web port
-                host = server_address.split(':')[0]
-            else:
-                host = server_address
-            
-            # Default web interface port (API server typically runs on 8889)
-            web_port = 8889
-            
-            # Build the web URL
-            if host in ['localhost', '127.0.0.1', '0.0.0.0']:
-                # For local addresses, use localhost
-                self.server_web_url = f"http://localhost:{web_port}"
-            else:
-                # For remote addresses, use the actual host
-                self.server_web_url = f"http://{host}:{web_port}"
-            
-            # Create HTML with clickable link
-            html_text = (
-                f'<span style="color: #414245;">Server Control Panel: '
-                f'<a href="{self.server_web_url}" style="color: #6ab2fa; text-decoration: none;">{self.server_web_url}</a>'
-                f' | Server Status: {status}</span>'
-            )
-            
-            # Enable rich text and open external links
-            self.ui.serverStatusLabel.setTextFormat(Qt.RichText)
-            self.ui.serverStatusLabel.setOpenExternalLinks(True)
-            self.ui.serverStatusLabel.setText(html_text)
-
-    def _build_project_data(self):
-        """
-        Build the complete project data structure for export.
-        
-        Returns:
-            dict: Complete project data ready for JSON serialization
-        """
-        from datetime import datetime
-        import platform
-        
-        # Get application version (you may want to define this elsewhere)
-        app_version = "1.0.0"  # Update this with actual version
-        
-        # Build metadata
-        metadata = {
-            "export_date": datetime.now().isoformat(),
-            "software": "Scan Space Image Processor",
-            "software_version": app_version,
-            "platform": platform.system(),
-            "python_version": platform.python_version(),
-            "export_format_version": "1.0"
-        }
-        
-        # Get current settings
-        settings = QSettings('ScanSpace', 'ImageProcessor')
-
-        # get root folder name
-        input_folder = self.ui.rawImagesDirectoryLineEdit.text().strip()
-        root_folder = os.path.basename(input_folder)
-
-        # Build processing settings
-        processing_settings = {
-            "output_directory": self.ui.outputDirectoryLineEdit.text(),
-            "export_format": self.ui.imageFormatComboBox.currentText() if hasattr(self.ui, 'imageFormatComboBox') else ".jpg",
-            "thread_count": settings.value('thread_count', 4, type=int),
-            "bit_depth_16": settings.value('bit_depth_16_default', False, type=bool),
-            "default_colorspace": settings.value('default_colorspace', 'sRGB', type=str),
-            "correct_thumbnails": settings.value('correct_thumbnails', False, type=bool),
-            "export_schema": settings.value('export_schema', '', type=str),
-            "use_export_schema": settings.value('use_export_schema', False, type=bool),
-            "custom_name": getattr(self.ui, 'newImageNameLineEdit', None).text() if hasattr(self.ui, 'newImageNameLineEdit') else '',
-            "root_folder": root_folder,
-            # Image adjustment parameters from UI controls
-            "exposure_adj": self.ui.exposureAdjustmentDoubleSpinBox.value(),  # Convert from slider range to EV stops
-            "shadow_adj": self.ui.shadowAdjustmentDoubleSpinBox.value(),
-            "highlight_adj": self.ui.highlightAdjustmentDoubleSpinBox.value(),
-            "white_balance_adj": self.ui.whitebalanceSpinbox.value(),
-            "enable_white_balance": self.ui.enableWhiteBalanceCheckBox.isChecked(),
-            "denoise_strength": self.ui.denoiseDoubleSpinBox.value(),
-            "sharpen_amount": self.ui.sharpenDoubleSpinBox.value(),
-            # Export format parameters that were missing
-            "jpeg_quality": settings.value('jpeg_quality', 100, type=int),
-            "output_format": self.ui.imageFormatComboBox.currentText() if hasattr(self.ui, 'imageFormatComboBox') else ".jpg",
-            "tiff_bitdepth": settings.value('tiff_bitdepth', 8, type=int),
-            "exr_colorspace": settings.value('exr_colorspace', 'sRGB', type=str)
-        }
-        
-        # Build chart configuration
-        chart_config = {
-            "use_precalculated_charts": settings.value('use_precalculated_charts', False, type=bool),
-            "chart_folder_path": settings.value('chart_folder_path', '', type=str),
-            "selected_precalc_chart": settings.value('selected_precalc_chart', '', type=str),
-            "manual_chart_path": getattr(self, 'calibration_file', None),
-            "has_chart_swatches": hasattr(self, 'chart_swatches') and self.chart_swatches is not None
-        }
-        
-        # Build image data
-        images = []
-        for i in range(self.ui.imagesListWidget.count()):
-            item = self.ui.imagesListWidget.item(i)
-            if item:
-                image_metadata = item.data(Qt.UserRole)
-                
-                # Skip group headers - they have is_group_header flag set to True
-                if image_metadata and isinstance(image_metadata, dict) and image_metadata.get('is_group_header', False):
-                    continue
-                
-                # For server compatibility, full_path should be the file path string
-                if image_metadata and isinstance(image_metadata, dict):
-                    # Extract the input_path as the full_path
-                    full_path = image_metadata.get('input_path', '')
-                    group_name = image_metadata.get('group_name', 'All Images')
-                else:
-                    # If metadata is a string or None (shouldn't happen but handle gracefully)
-                    full_path = image_metadata if isinstance(metadata, str) else ""
-                    group_name = 'All Images'
-                
-                # Only add images that have a valid input path (skip invalid entries)
-                if not full_path:
-                    continue
-                
-                image_data = {
-                    "index": i,
-                    "filename": item.text(),
-                    "full_path": full_path,  # Server expects this to be a string path (input_path)
-                    # "metadata": metadata_copy,  # Complete metadata for export compatibility
-                    "group": group_name,  # Use group name from metadata
-                    "selected": True,  # Mark all images as selected for processing
-                    "has_user_data": item.data(Qt.UserRole + 1) is not None,
-                    "user_data_keys": list(item.data(Qt.UserRole + 1).keys()) if item.data(Qt.UserRole + 1) else []
-                }
-                images.append(image_data)
-
-        # Build image groups data with chart swatches
-        image_groups = {}
-        
-        # First, collect all unique groups from the images
-        all_groups = set()
-        for image in images:
-            all_groups.add(image['group'])
-        
-        # Find available calibration data
-        available_calibrations = {}
-        fallback_calibration = None
-        
-        if hasattr(self, 'group_calibrations') and self.group_calibrations:
-            for group_name, calibration_data in self.group_calibrations.items():
-                if calibration_data and 'swatches' in calibration_data:
-                    available_calibrations[group_name] = calibration_data
-                    if fallback_calibration is None:
-                        fallback_calibration = calibration_data
-        
-        # Check for global chart swatches as fallback
-        if not available_calibrations and hasattr(self, 'chart_swatches') and self.chart_swatches is not None:
-            fallback_calibration = {
-                'swatches': self.chart_swatches,
-                'file': getattr(self, 'calibration_file', '')
-            }
-        
-        # If no calibration data found anywhere, show error dialog
-        if not available_calibrations and not fallback_calibration:
-            from PySide6.QtWidgets import QMessageBox
-            msg = QMessageBox()
-            msg.setIcon(QMessageBox.Critical)
-            msg.setWindowTitle("No Chart Calibration Found")
-            msg.setText("No color chart calibration data was found in the scene.")
-            msg.setInformativeText("Please load a color chart calibration before exporting to the server.")
-            msg.setStandardButtons(QMessageBox.Ok)
-            msg.exec()
-            return None
-        
-        # Build image groups with calibration data
-        for group_name in all_groups:
-            
-            # Use group-specific calibration if available, otherwise use fallback
-            calibration_data = available_calibrations.get(group_name, fallback_calibration)
-            
-            if calibration_data and 'swatches' in calibration_data:
-                # Convert numpy array to list for JSON serialization
-                swatches_array = calibration_data['swatches']
-                
-                # DIAGNOSTIC: Deep analysis of swatches data structure
-                
-                if hasattr(swatches_array, 'shape'):
-                    array_size_mb = (swatches_array.nbytes / 1024 / 1024) if hasattr(swatches_array, 'nbytes') else 0
-                    # Check if this is massive data that shouldn't be here
-                    if array_size_mb > 50:  # More than 50MB is definitely wrong
-                        # Show detailed shape analysis
-                        if len(swatches_array.shape) > 2:
-                            self.log_error(f"ERROR: Array has {len(swatches_array.shape)} dimensions, expected 2 (24, 3)")
-
-                        # Create emergency fallback with just 24 color values
-                        fallback_colors = np.array([
-                            [0.4, 0.3, 0.2], [0.7, 0.5, 0.4], [0.3, 0.4, 0.6], [0.2, 0.3, 0.2],
-                            [0.5, 0.5, 0.7], [0.3, 0.7, 0.6], [0.8, 0.4, 0.2], [0.2, 0.2, 0.5],
-                            [0.7, 0.3, 0.4], [0.3, 0.2, 0.4], [0.6, 0.7, 0.3], [0.8, 0.6, 0.2],
-                            [0.2, 0.3, 0.6], [0.3, 0.5, 0.3], [0.6, 0.2, 0.2], [0.9, 0.8, 0.3],
-                            [0.7, 0.3, 0.6], [0.2, 0.5, 0.6], [0.9, 0.9, 0.9], [0.6, 0.6, 0.6],
-                            [0.4, 0.4, 0.4], [0.2, 0.2, 0.2], [0.05, 0.05, 0.05], [0.0, 0.0, 0.0]
-                        ], dtype=np.float32)
-                        swatches_array = fallback_colors
-
-                start_time = time.time()
-                try:
-                    # Convert to list for JSON serialization
-                    if hasattr(swatches_array, 'tolist'):
-                        swatches_list = swatches_array.tolist()
-                    elif isinstance(swatches_array, (list, tuple)):
-                        swatches_list = list(swatches_array)
-                    else:
-                        swatches_list = list(swatches_array)
-                    
-                    # Validate and trim if necessary
-                    if len(swatches_list) != 24:
-                        if len(swatches_list) > 24:
-                            swatches_list = swatches_list[:24]
-                    
-                    # Round for efficiency
-                    if swatches_list and isinstance(swatches_list[0], (list, tuple, np.ndarray)):
-                        swatches_list = [[round(float(c), 6) for c in swatch] for swatch in swatches_list]
-                    
-                except Exception as e:
-                    self.log_warning(f"[Project] Failed to convert swatches for group {group_name}: {e}")
-                    swatches_list = []
-                
-                conversion_time = time.time() - start_time
-
-                # Determine if this is using fallback calibration
-                is_fallback = (group_name not in available_calibrations)
-                
-                image_groups[group_name] = {
-                    "has_calibration": True,
-                    "chart_file": calibration_data.get('file', ''),
-                    "chart_swatches": swatches_list,
-                    "chart_swatches_count": len(swatches_list),
-                    "using_fallback_calibration": is_fallback
-                }
-                
-                if is_fallback:
-                    self.log_debug(f"Group {group_name} using fallback calibration")
-            else:
-                image_groups[group_name] = {
-                    "has_calibration": False,
-                    "chart_file": '',
-                    "chart_swatches": [],
-                    "chart_swatches_count": 0,
-                    "using_fallback_calibration": False
-                }
-
-        # Import/Export settings
-        import_export_settings = {
-            "look_in_subfolders": settings.value('look_in_subfolders', False, type=bool),
-            "group_by_subfolder": settings.value('group_by_subfolder', False, type=bool),
-            "group_by_prefix": settings.value('group_by_prefix', False, type=bool),
-            "prefix_string": settings.value('prefix_string', '', type=str),
-            "ignore_formats": settings.value('ignore_formats', False, type=bool),
-            "ignore_string": settings.value('ignore_string', '', type=str),
-            "use_import_rules": settings.value('use_import_rules', False, type=bool)
-        }
-
-        # Network settings (if applicable)
-        network_settings = {
-            "network_mode": getattr(self, 'network_mode', 'local'),
-            "enable_server": settings.value('enable_server', False, type=bool),
-            "is_host_server": settings.value('is_host_server', True, type=bool),
-            "process_on_host": settings.value('process_on_host', True, type=bool),
-            "server_address": settings.value('server_address', '', type=str),
-            "host_server_ip": settings.value('host_server_ip', '', type=str),
-            "standalone_server_host": settings.value('standalone_server_host', 'localhost', type=str),
-            "standalone_server_port": settings.value('standalone_server_port', 8889, type=int)
-        }
-
-        # Build complete project structure
-        project_data = {
-            "metadata": metadata,
-            "processing_settings": processing_settings,
-            "chart_configuration": chart_config,
-            "import_export_settings": import_export_settings,
-            "network_settings": network_settings,
-            "images": images,
-            "image_groups": image_groups,
-            "raw_images_directory": self.ui.rawImagesDirectoryLineEdit.text(),
-            "total_images": len(images),
-            "selected_images": sum(1 for img in images if img["selected"])
-        }
-
-        return project_data
-    
-    def _sanitize_project_data(self, data):
-        """
-        Recursively sanitize project data to remove emojis and non-standard characters.
-        
-        This ensures JSON export compatibility and prevents encoding issues when
-        the project file is loaded on different systems.
-        
-        Args:
-            data: The data structure to sanitize (dict, list, str, or other)
-            
-        Returns:
-            Sanitized data structure with emojis and non-standard characters removed
-        """
-        import re
-        
-        def sanitize_string(text):
-            """Remove emojis and non-standard characters from a string."""
-            if not isinstance(text, str):
-                return text
-            
-            # Remove emojis using regex
-            # This pattern matches most emoji ranges in Unicode
-            emoji_pattern = re.compile(
-                "["
-                "\U0001F600-\U0001F64F"  # emoticons
-                "\U0001F300-\U0001F5FF"  # symbols & pictographs
-                "\U0001F680-\U0001F6FF"  # transport & map symbols
-                "\U0001F1E0-\U0001F1FF"  # flags (iOS)
-                "\U00002702-\U000027B0"  # dingbats
-                "\U000024C2-\U0001F251"  # enclosed characters
-                "\U0001F900-\U0001F9FF"  # supplemental symbols
-                "\U0001F018-\U0001F270"  # various symbols
-                "\U0001F300-\U0001F5FF"  # misc symbols
-                "]+", 
-                flags=re.UNICODE
-            )
-            
-            # Remove emojis
-            text = emoji_pattern.sub('', text)
-            
-            # Remove other non-printable characters but keep basic punctuation and newlines
-            # Keep: letters, numbers, spaces, basic punctuation, newlines, tabs
-            text = re.sub(r'[^\w\s\.\,\!\?\:\;\-\_\(\)\[\]\{\}\"\'\/\\\r\n\t]', '', text)
-            
-            # Clean up multiple spaces
-            text = re.sub(r'\s+', ' ', text).strip()
-            
-            return text
-        
-        def sanitize_recursive(obj):
-            """Recursively sanitize data structures."""
-            if isinstance(obj, dict):
-                return {sanitize_string(k): sanitize_recursive(v) for k, v in obj.items()}
-            elif isinstance(obj, list):
-                return [sanitize_recursive(item) for item in obj]
-            elif isinstance(obj, str):
-                return sanitize_string(obj)
-            elif hasattr(obj, 'tolist'):
-                # Handle numpy arrays by converting to list
-                try:
-                    # Convert to list but don't recursively sanitize - 
-                    # chart swatches are just numbers, no strings to sanitize
-                    return obj.tolist()
-                except Exception:
-                    return obj
-            else:
-                # For other types (int, float, bool, None), return as-is
-                return obj
-        
-        return sanitize_recursive(data)
-
-    def _debug_find_unserializable_objects(self, obj, path="root"):
-        """Debug helper to find non-JSON-serializable objects."""
-        import json
-        try:
-            json.dumps(obj)
-        except TypeError as e:
-            if isinstance(obj, dict):
-                for key, value in obj.items():
-                    try:
-                        json.dumps(value)
-                    except TypeError:
-                        self.log_error(f"[Debug] Non-serializable object at {path}.{key}: {type(value)}")
-                        if hasattr(value, 'shape'):  # Likely numpy array
-                            self.log_error(f"[Debug] Object shape: {value.shape}, dtype: {getattr(value, 'dtype', 'unknown')}")
-                        self._debug_find_unserializable_objects(value, f"{path}.{key}")
-            elif isinstance(obj, list):
-                for i, item in enumerate(obj):
-                    try:
-                        json.dumps(item)
-                    except TypeError:
-                        self.log_error(f"[Debug] Non-serializable object at {path}[{i}]: {type(item)}")
-                        if hasattr(item, 'shape'):  # Likely numpy array
-                            self.log_error(f"[Debug] Object shape: {item.shape}, dtype: {getattr(item, 'dtype', 'unknown')}")
-                        self._debug_find_unserializable_objects(item, f"{path}[{i}]")
-            else:
-                self.log_error(f"[Debug] Non-serializable leaf object at {path}: {type(obj)}")
-                if hasattr(obj, 'shape'):  # Likely numpy array
-                    self.log_error(f"[Debug] Object shape: {obj.shape}, dtype: {getattr(obj, 'dtype', 'unknown')}")
 
     def on_use_precalc_chart_toggled(self, checked):
         """
@@ -2754,43 +1881,52 @@ IMAGE ADJUSTMENTS:"""
             return
 
         meta = item.data(Qt.UserRole)
-        
+
         # Skip group headers
         if meta.get('is_group_header', False):
             return
-            
+
         path_to_show = meta.get('output_path') or meta['input_path']
         input_path = meta.get('input_path')
-        
+
         if path_to_show:
             # Debug logging for path selection
             output_path = meta.get('output_path')
             status = meta.get('status', 'not processed')
             self.log_debug(f"[Preview Debug] Status: {status}, Input: {os.path.basename(input_path) if input_path else 'None'}, Output: {os.path.basename(output_path) if output_path else 'None'}, Showing: {os.path.basename(path_to_show)}")
-            
+
             # Check if we should load RAW for real-time editing
-            if (input_path and 
+            if (input_path and
                 input_path.lower().endswith(('.nef', '.cr2', '.cr3', '.dng', '.arw', '.raw')) and
                 input_path != self.current_raw_path and
                 not output_path):  # Only for unprocessed RAW files
-                
+
                 # Show thumbnail immediately for instant feedback
                 self.preview_thumbnail(path_to_show)
-                
-                # Cancel any pending RAW load and set up delayed loading
-                self.raw_load_timer.stop()  # Cancel previous timer
-                if self.is_loading_raw:
-                    self.log_debug("[Preview] Cancelling previous RAW load due to image change")
-                    # Note: The actual loading cancellation is handled in _load_raw_for_preview
-                
+
+                # Set up delayed loading with race condition protection
+                previous_pending = self.pending_raw_path
                 self.pending_raw_path = input_path
-                self.log_debug(f"[Preview] Scheduling RAW load for: {os.path.basename(input_path)} (500ms delay)")
-                self.raw_load_timer.start(100)  # 0.5 second delay
+
+                # If this is the same path as what was already pending, extend the timer
+                if previous_pending == input_path and self.raw_load_timer.isActive():
+                    self.log_debug(f"[Preview] Extending timer for same image: {os.path.basename(input_path)}")
+                    self.raw_load_timer.stop()
+                    self.raw_load_timer.start(100)
+                else:
+                    # Cancel previous timer and start new one
+                    self.raw_load_timer.stop()
+                    if self.is_loading_raw:
+                        self.log_debug("[Preview] Cancelling previous RAW load due to image change")
+                        # Note: The actual loading cancellation is handled in _load_raw_for_preview
+
+                    self.log_debug(f"[Preview] Scheduling RAW load for: {os.path.basename(input_path)} (100ms delay)")
+                    self.raw_load_timer.start(100)
             else:
                 # Cancel any pending RAW load
                 self.raw_load_timer.stop()
                 self.pending_raw_path = None
-                
+
                 # Clear RAW state and show regular thumbnail
                 self._clear_preview_state()
                 self.preview_thumbnail(path_to_show)
@@ -2804,6 +1940,8 @@ IMAGE ADJUSTMENTS:"""
         if self.ui.displayDebugExposureDataCheckBox.isChecked():
             self.show_exposure_debug_overlay()
 
+        self.file_naming_schema.update_preview_for_selection_change(self)
+
     def _clear_preview_state(self):
         """Clear current RAW preview state and invalidate cache."""
         self.current_raw_path = None
@@ -2811,16 +1949,16 @@ IMAGE ADJUSTMENTS:"""
         self.current_preview_array = None
         self.original_white_balance = 5500
         self.is_loading_raw = False
-        
+
         # Hide loading spinner
         self.hide_loading_spinner()
-        
+
         # Clear preview state
 
     def _load_raw_for_preview(self, raw_path: str):
         """
         Load RAW file in background for real-time preview editing.
-        
+
         Args:
             raw_path: Path to the RAW image file
         """
@@ -2828,62 +1966,62 @@ IMAGE ADJUSTMENTS:"""
         if self.is_loading_raw:
             self.log_debug(f"[Preview] Already loading RAW, skipping: {os.path.basename(raw_path)}")
             return
-        
+
         # Verify this is still the pending path (not cancelled by user scrolling)
         if raw_path != self.pending_raw_path and self.pending_raw_path is not None:
             self.log_debug(f"[Preview] RAW path changed during delay, skipping: {os.path.basename(raw_path)}")
             return
-            
+
         self.is_loading_raw = True
         self.current_raw_path = raw_path
-        
+
         # Show loading spinner
         self.show_loading_spinner()
         self.log_debug(f"[Preview] Starting RAW load: {os.path.basename(raw_path)}")
-        
+
         # Create and start RAW loading worker
         worker = RawLoadWorker(raw_path)
         worker.signals.loaded.connect(self._on_raw_loaded)
         worker.signals.error.connect(self._on_raw_load_error)
-        
+
         self.threadpool.start(worker)
 
     def _on_raw_loaded(self, raw_array: np.ndarray):
         """
         Handle successful RAW loading.
-        
+
         Args:
             raw_array: Loaded RAW image as float32 array
         """
         self.is_loading_raw = False
-        
+
         # Hide loading spinner
         self.hide_loading_spinner()
-        
+
         try:
             # Check if this RAW load is still relevant (user might have changed selection)
             if self.current_raw_path != self.pending_raw_path and self.pending_raw_path is not None:
                 self.log_debug(f"[Preview] RAW loaded but selection changed, discarding result: {os.path.basename(self.current_raw_path)}")
                 return
-            
+
             # Validate the loaded RAW array
             if raw_array is None or raw_array.size == 0:
                 self.log_debug(f"[Preview] RAW array is invalid, cannot process")
                 return
-            
+
             if len(raw_array.shape) != 3 or raw_array.shape[2] != 3:
                 self.log_debug(f"[Preview] RAW array has unexpected shape: {raw_array.shape}")
                 return
-            
+
             # Store the RAW array
             self.current_raw_array = raw_array
-            
+
             # Create preview-sized version (max 4MP)
             preview_array = self._resize_for_preview(raw_array)
             if preview_array is None or preview_array.size == 0:
                 self.log_debug(f"[Preview] Preview resize failed")
                 return
-            
+
             # Extract white balance from EXIF with fallback
             try:
                 wb_temp = self._extract_white_balance_from_exif(self.current_raw_path)
@@ -2891,17 +2029,17 @@ IMAGE ADJUSTMENTS:"""
             except Exception as e:
                 self.log_debug(f"[Preview] White balance extraction failed: {e}")
                 self.original_white_balance = 5500.0
-            
+
             # Clear any stale preview state
-            
+
             # Only assign preview array after all validations pass
             self.current_preview_array = preview_array
-            
+
             self.log_debug(f"[Preview] RAW loaded: {raw_array.shape}, Preview: {self.current_preview_array.shape}, WB: {self.original_white_balance}K")
-            
+
             # Apply current adjustments and display (force recalculation for new image)
             self._update_preview_display(force_recalculate=True)
-            
+
         except Exception as e:
             self.log_debug(f"[Preview] Error processing loaded RAW: {e}")
             # Reset preview state on error
@@ -2910,17 +2048,17 @@ IMAGE ADJUSTMENTS:"""
     def _on_raw_load_error(self, error_msg: str):
         """
         Handle RAW loading error.
-        
+
         Args:
             error_msg: Error message from RAW loading
         """
         self.is_loading_raw = False
-        
+
         # Hide loading spinner
         self.hide_loading_spinner()
-        
+
         self.log_error(f"[Preview] Failed to load RAW: {error_msg}")
-        
+
         # Fall back to regular thumbnail
         if self.current_raw_path:
             self.preview_thumbnail(self.current_raw_path)
@@ -2940,29 +2078,29 @@ IMAGE ADJUSTMENTS:"""
     def _resize_for_preview(self, img_array: np.ndarray) -> np.ndarray:
         """
         Resize image array to maximum 4MP for preview performance.
-        
+
         Args:
             img_array: Full resolution image array
-            
+
         Returns:
             np.ndarray: Resized preview array
         """
         h, w = img_array.shape[:2]
         current_pixels = h * w
         max_preview_pixels = 4_000_000  # 4MP max
-        
+
         # Early exit if already small enough
         if current_pixels <= max_preview_pixels:
             return img_array
-        
+
         # Calculate target dimensions maintaining aspect ratio
         scale_factor = np.sqrt(max_preview_pixels / current_pixels)
         new_w = max(1, int(w * scale_factor))
         new_h = max(1, int(h * scale_factor))
-        
+
         # Resize using INTER_AREA for best downsampling quality
         resized = cv2.resize(img_array, (new_w, new_h), interpolation=cv2.INTER_AREA)
-        
+
         self.log_debug(f"[Preview] Resize: {w}x{h} → {new_w}x{new_h} ({(new_w*new_h)/1e6:.1f}MP)")
         return resized
 
@@ -2972,18 +2110,18 @@ IMAGE ADJUSTMENTS:"""
         if self.current_preview_array is None:
             self.log_debug("[Preview] No preview array available for adjustment")
             return
-            
+
         # Additional safety checks for array integrity
-        if (self.current_preview_array.size == 0 or 
-            len(self.current_preview_array.shape) != 3 or 
+        if (self.current_preview_array.size == 0 or
+            len(self.current_preview_array.shape) != 3 or
             self.current_preview_array.shape[2] != 3):
             self.log_debug(f"[Preview] Invalid preview array shape: {self.current_preview_array.shape}")
             return
-        
+
         # Ensure white balance is valid
         if self.original_white_balance is None:
             self.original_white_balance = 5500.0
-        
+
         # Get current adjustment values from UI
         exposure = self.ui.exposureAdjustmentDoubleSpinBox.value()
         shadows = self.ui.shadowAdjustmentDoubleSpinBox.value()
@@ -2991,7 +2129,7 @@ IMAGE ADJUSTMENTS:"""
         target_wb = self.ui.whitebalanceSpinbox.value() if self.ui.enableWhiteBalanceCheckBox.isChecked() else self.original_white_balance
         denoise_strength = self.ui.denoiseDoubleSpinBox.value() if self.ui.denoiseImageCheckBox.isChecked() else 0.0
         sharpen_amount = self.ui.sharpenDoubleSpinBox.value() if self.ui.sharpenImageCheckBox.isChecked() else 0.0
-        
+
         # Apply adjustments using editing tools
         adjusted_array = apply_all_adjustments(
             self.current_preview_array,
@@ -3006,30 +2144,30 @@ IMAGE ADJUSTMENTS:"""
             sharpen_radius=1.0,  # Default radius - could be made configurable later
             sharpen_threshold=0.0  # Default threshold - could be made configurable later
         )
-        
+
         # Convert to QPixmap and display
         pixmap = self._array_to_pixmap(adjusted_array)
-        
+
         # Check if pixmap conversion was successful
         if pixmap is None or pixmap.isNull():
             self.log_debug(f"[Preview] ❌ Pixmap conversion failed, cannot display preview")
             return
-            
+
         self._display_preview(pixmap)
 
     def _array_to_pixmap(self, img_array: np.ndarray) -> QPixmap:
         """
         Convert numpy array to QPixmap for display.
-        
+
         Args:
             img_array: Float32 image array (0-1 range)
-            
+
         Returns:
             QPixmap: Converted pixmap ready for display
         """
         # Performance optimization: Check if we can use faster conversion
         total_pixels = img_array.shape[0] * img_array.shape[1]
-        
+
         if total_pixels <= 500_000:  # 0.5MP or smaller - use fastest conversion
             # Skip gamma correction for ultra-small preview images
             uint8_array = np.uint8(255 * np.clip(img_array, 0, 1))
@@ -3037,31 +2175,31 @@ IMAGE ADJUSTMENTS:"""
             # Apply gamma correction and convert to uint8
             gamma_corrected = colour.cctf_encoding(np.clip(img_array, 0, 1))
             uint8_array = np.uint8(255 * gamma_corrected)
-        
+
         # Ensure contiguous memory layout for fastest QImage creation
         if not uint8_array.flags['C_CONTIGUOUS']:
             uint8_array = np.ascontiguousarray(uint8_array)
-        
+
         # Convert to QImage
         h, w, c = uint8_array.shape
         bytes_per_line = w * c
         qimg = QImage(uint8_array.data, w, h, bytes_per_line, QImage.Format_RGB888)
-        
+
         return QPixmap.fromImage(qimg)
 
 
     def _extract_white_balance_from_exif(self, img_path: str) -> float:
         """
         Extract white balance color temperature from EXIF metadata.
-        
+
         Args:
             img_path: Path to the image file
-            
+
         Returns:
             float: White balance temperature in Kelvin (default 5500K if not found)
         """
         default_wb = 5500.0  # Default daylight temperature
-        
+
         try:
             # Method 1: Try to get white balance from rawpy (most accurate for RAW files)
             if img_path.lower().endswith(('.nef', '.cr2', '.cr3', '.dng', '.arw', '.raw')):
@@ -3069,26 +2207,26 @@ IMAGE ADJUSTMENTS:"""
                 if wb_temp is not None:
                     self.log_debug(f"[WB] Found white balance from rawpy: {wb_temp}K")
                     return wb_temp
-            
+
             # Method 2: Try to get white balance from EXIF using OpenImageIO
             wb_temp = self._get_wb_from_oiio_exif(img_path)
             if wb_temp is not None:
                 self.log_debug(f"[WB] Found white balance from EXIF: {wb_temp}K")
                 return wb_temp
-                
+
         except Exception as e:
             self.log_debug(f"[WB] Error reading white balance from {img_path}: {e}")
-        
+
         self.log_debug(f"[WB] Using default white balance: {default_wb}K")
         return default_wb
 
     def _get_wb_from_rawpy(self, img_path: str) -> float:
         """
         Extract white balance from RAW file using rawpy.
-        
+
         Args:
             img_path: Path to RAW image
-            
+
         Returns:
             float: White balance temperature in Kelvin, or None if not available
         """
@@ -3100,15 +2238,15 @@ IMAGE ADJUSTMENTS:"""
                 if wb_coeffs is not None and len(wb_coeffs) >= 3:
                     # Convert RGB multipliers to approximate color temperature
                     r_mult, g_mult, b_mult = wb_coeffs[0], wb_coeffs[1], wb_coeffs[2]
-                    
+
                     # Normalize to green
                     if g_mult > 0:
                         r_ratio = r_mult / g_mult
                         b_ratio = b_mult / g_mult
-                        
+
                         # Estimate temperature from red/blue ratio
                         rb_ratio = r_ratio / (b_ratio + 1e-10)
-                        
+
                         # Empirical formula for RGB multipliers to temperature conversion
                         if rb_ratio > 1.5:
                             # Very warm light
@@ -3119,46 +2257,46 @@ IMAGE ADJUSTMENTS:"""
                         else:
                             # Cool light
                             temp = 5000 + (1.0 - rb_ratio) * 5000
-                        
+
                         # Clamp to reasonable range
                         temp = max(2000, min(12000, temp))
                         return float(temp)
-                        
+
         except Exception as e:
             self.log_debug(f"[WB] Error reading rawpy white balance: {e}")
-        
+
         return None
 
     def _get_wb_from_oiio_exif(self, img_path: str) -> float:
         """
         Extract white balance from EXIF metadata using OpenImageIO.
-        
+
         Args:
             img_path: Path to image file
-            
+
         Returns:
             float: White balance temperature in Kelvin, or None if not available
         """
         try:
             from OpenImageIO import ImageInput
-            
+
             img_input = ImageInput.open(img_path)
             if not img_input:
                 return None
-                
+
             spec = img_input.spec()
             img_input.close()
-            
+
             # Try various EXIF white balance fields
             wb_fields = [
                 'Exif:ColorTemperature',
-                'Exif:WhiteBalance', 
+                'Exif:WhiteBalance',
                 'EXIF:ColorTemperature',
                 'EXIF:WhiteBalance',
                 'ColorTemperature',
                 'WhiteBalance'
             ]
-            
+
             for field in wb_fields:
                 if hasattr(spec, 'getattribute'):
                     try:
@@ -3179,10 +2317,10 @@ IMAGE ADJUSTMENTS:"""
                                     pass
                     except:
                         continue
-                        
+
         except Exception as e:
             self.log_debug(f"[WB] Error reading OIIO EXIF white balance: {e}")
-        
+
         return None
 
     def preview_thumbnail(self, path):
@@ -3195,23 +2333,23 @@ IMAGE ADJUSTMENTS:"""
             if meta.get('input_path') == path or meta.get('output_path') == path:
                 exposure_factor = meta.get('average_exposure', 1.0)
                 break
-        
+
         # Load pixmap
         self.log_debug(f"[Preview Thumbnail] Loading image from: {path}, exists: {os.path.exists(path)}")
         pixmap = ImageLoader.create_pixmap_from_path(
-            path, cache=self.thumbnail_cache, 
+            path, cache=self.thumbnail_cache,
             chart_swatches=self.chart_swatches,
-            correct_thumbnails=self.correct_thumbnails, 
+            correct_thumbnails=self.correct_thumbnails,
             log_callback=self.log_debug
         )
-        
+
         if not pixmap or pixmap.isNull():
             self.log_error(f"[Preview Thumbnail] ❌ Failed to load image for preview from {path}")
             self.log_debug(f"[Preview Thumbnail] Pixmap is None: {pixmap is None}, Pixmap isNull: {pixmap.isNull() if pixmap else 'N/A'}")
             return
         else:
             self.log_debug(f"[Preview Thumbnail] ✅ Successfully loaded pixmap from {path}, size: {pixmap.width()}x{pixmap.height()}")
-            
+
         # Apply exposure brightness if needed
         if exposure_factor != 1.0:
             pixmap = self._adjust_pixmap_brightness(pixmap, exposure_factor)
@@ -4907,6 +4045,368 @@ IMAGE ADJUSTMENTS:"""
         super().resizeEvent(event)
         if hasattr(self, 'loading_spinner'):
             self._position_loading_spinner()
+
+    # ────────────────────────────────────────────────────────────
+    # Thumbnail Grid View Methods
+    # ────────────────────────────────────────────────────────────
+    
+    def toggle_thumbnail_view_mode(self, enabled):
+        """
+        Toggle between text list view and thumbnail grid view.
+        
+        Args:
+            enabled (bool): True to enable thumbnail view, False for text list view
+        """
+        self.is_thumbnail_view_mode = enabled
+        
+        if enabled:
+            self.log_debug("[Thumbnail] Switching to thumbnail grid view")
+            self._create_thumbnail_grid_view()
+        else:
+            self.log_debug("[Thumbnail] Switching to text list view")
+            self._show_text_list_view()
+    
+    def update_thumbnail_zoom_level(self, value):
+        """
+        Update the thumbnail zoom level (number of columns) and refresh the grid if in thumbnail mode.
+        
+        Args:
+            value (int): Number of columns from 1-6 (slider range)
+        """
+        self.thumbnail_zoom_level = value
+        
+        # Only update grid if we're currently in thumbnail mode
+        if self.is_thumbnail_view_mode:
+            # Use populate instead of refresh to handle column count changes
+            self._populate_thumbnail_grid()
+    
+    def _create_thumbnail_grid_view(self):
+        """Create and show the thumbnail grid container using existing UI scroll area."""
+        # Hide the text list widget
+        self.ui.imagesListWidget.hide()
+        
+        # Create thumbnail grid widget if it doesn't exist
+        if self.thumbnail_grid_widget is None:
+            from PySide6.QtWidgets import QWidget, QGridLayout
+            
+            # Create the grid widget
+            self.thumbnail_grid_widget = QWidget()
+            self.thumbnail_grid_layout = QGridLayout(self.thumbnail_grid_widget)
+            self.thumbnail_grid_layout.setContentsMargins(5, 5, 5, 5)
+            self.thumbnail_grid_layout.setSpacing(5)
+            
+            # Set the grid widget as the scroll area's widget
+            self.ui.thumbnailContainerScrollArea.setWidget(self.thumbnail_grid_widget)
+        
+        # Show the existing thumbnail container from UI
+        self.ui.thumbnailContainerScrollArea.show()
+        
+        # Populate the grid with thumbnails
+        self._populate_thumbnail_grid()
+    
+    def _show_text_list_view(self):
+        """Show the text list widget and hide the thumbnail grid."""
+        # Hide the thumbnail container scroll area
+        self.ui.thumbnailContainerScrollArea.hide()
+        
+        # Show the text list widget
+        self.ui.imagesListWidget.show()
+    
+    def _populate_thumbnail_grid(self):
+        """Populate the thumbnail grid with images and group headers."""
+        if not self.thumbnail_grid_layout:
+            return
+        
+        # Check if column count changed or grid is empty
+        current_layout_columns = getattr(self, '_current_grid_columns', 0)
+        grid_is_empty = self.thumbnail_grid_layout.count() == 0
+        column_count_changed = current_layout_columns != self.thumbnail_zoom_level
+        
+        if column_count_changed:
+            # Clear existing items when column count changes
+            self._clear_thumbnail_grid()
+            self._current_grid_columns = self.thumbnail_zoom_level
+        elif not grid_is_empty:
+            # Grid already populated with correct columns, just refresh styling
+            self._refresh_thumbnail_grid()
+            return
+        
+        # Use zoom level directly as number of columns (1-6)
+        columns = self.thumbnail_zoom_level
+        
+        # Calculate thumbnail size to fit within maximum area width (320px)
+        max_container_width = 300  # Maximum preview area width
+        container_width = self.ui.thumbnailContainerScrollArea.viewport().width()
+        
+        # Use the smaller of actual width or max width
+        effective_width = min(container_width, max_container_width) if container_width > 0 else max_container_width
+        
+        # Calculate thumbnail size to fit columns within effective width
+        # Account for margins (10px total) and spacing between thumbnails (5px each)
+        available_width = effective_width - 3  # 5px margin on each side
+        spacing_width = (columns - 1)  # 5px spacing between columns
+        thumbnail_size = max(16, (available_width - spacing_width) // columns)  # Minimum 64px thumbnails
+        
+        row = 0
+        col = 0
+        
+        # Track the currently selected item for restoration
+        current_selection = self.ui.imagesListWidget.currentRow()
+        
+        for i in range(self.ui.imagesListWidget.count()):
+            list_item = self.ui.imagesListWidget.item(i)
+            metadata = list_item.data(Qt.UserRole)
+            
+            if metadata.get('is_group_header', False):
+                # Add group header spanning all columns
+                group_label = self._create_group_header_widget(list_item.text(), columns)
+                if col > 0:  # Move to next row if we're not at the start
+                    row += 1
+                    col = 0
+                self.thumbnail_grid_layout.addWidget(group_label, row, 0, 1, columns)
+                row += 1
+                col = 0
+            else:
+                # Add thumbnail widget
+                thumbnail_widget = self._create_thumbnail_widget(
+                    list_item, i, thumbnail_size, current_selection == i
+                )
+                self.thumbnail_grid_layout.addWidget(thumbnail_widget, row, col)
+                
+                col += 1
+                if col >= columns:
+                    col = 0
+                    row += 1
+        
+        self.log_debug(f"[Thumbnail] Grid populated: {row + 1} rows, {columns} columns, {thumbnail_size}px thumbnails")
+    
+    def _clear_thumbnail_grid(self):
+        """Clear all widgets from the thumbnail grid."""
+        if not self.thumbnail_grid_layout:
+            return
+        
+        # Remove all widgets from the layout
+        while self.thumbnail_grid_layout.count():
+            item = self.thumbnail_grid_layout.takeAt(0)
+            if item.widget():
+                item.widget().setParent(None)
+    
+    def _create_group_header_widget(self, group_text, span_columns):
+        """
+        Create a group header widget for the thumbnail grid.
+        
+        Args:
+            group_text (str): The group header text
+            span_columns (int): Number of columns to span
+        
+        Returns:
+            QLabel: Styled group header label
+        """
+        from PySide6.QtWidgets import QLabel
+        from PySide6.QtGui import QFont
+
+        header_label = QLabel(group_text)
+        header_label.setObjectName("thumbnailGroupHeader")
+        
+        # Style the header to match the original list widget headers
+        header_label.setStyleSheet("""
+            QLabel#thumbnailGroupHeader {
+                background-color: #E3F2FD;
+                padding: 8px;
+                border-radius: 4px;
+                font-weight: bold;
+                color: #1565C0;
+            }
+        """)
+        
+        # Set font to bold
+        font = header_label.font()
+        font.setBold(True)
+        header_label.setFont(font)
+        
+        return header_label
+    
+    def _create_thumbnail_widget(self, list_item, item_index, thumbnail_size, is_selected):
+        """
+        Create a thumbnail widget for the grid.
+        
+        Args:
+            list_item (QListWidgetItem): The source list item
+            item_index (int): Index in the original list
+            thumbnail_size (int): Size of the thumbnail in pixels
+            is_selected (bool): Whether this item is currently selected
+        
+        Returns:
+            QWidget: Thumbnail widget with image and metadata
+        """
+        from PySide6.QtWidgets import QWidget, QVBoxLayout, QLabel
+        from PySide6.QtGui import QFont
+
+        # Create container widget
+        container = QWidget()
+        container.setObjectName("thumbnailItemContainer")
+        container.setFixedSize(thumbnail_size + 2, thumbnail_size + 20)  # +10 for border, +40 for text
+        
+        # Create layout
+        layout = QVBoxLayout(container)
+        layout.setContentsMargins(2, 2, 2, 2)
+        layout.setSpacing(2)
+        
+        # Create thumbnail label
+        thumbnail_label = ClickableLabel(item_index)
+        thumbnail_label.setObjectName("thumbnailImage")
+        thumbnail_label.setFixedSize(thumbnail_size, thumbnail_size)
+        thumbnail_label.setStyleSheet("border: 1px solid #ccc; background: #f5f5f5;")
+        thumbnail_label.setAlignment(Qt.AlignCenter)
+        thumbnail_label.setScaledContents(True)
+        
+        # Load thumbnail image
+        metadata = list_item.data(Qt.UserRole)
+        image_path = metadata.get('input_path')
+        
+        if image_path and image_path in self.thumbnail_cache:
+            cache_entry = self.thumbnail_cache[image_path]
+            if cache_entry and 'pixmap' in cache_entry:
+                pixmap = cache_entry['pixmap']
+                if pixmap and not pixmap.isNull():
+                    # Scale pixmap to fit thumbnail size
+                    scaled_pixmap = pixmap.scaled(
+                        thumbnail_size, thumbnail_size,
+                        Qt.KeepAspectRatio,
+                        Qt.SmoothTransformation
+                    )
+                    
+                    # Apply exposure adjustment if available
+                    exposure_factor = metadata.get('average_exposure', 1.0)
+                    if exposure_factor != 1.0:
+                        scaled_pixmap = self._adjust_pixmap_brightness(scaled_pixmap, exposure_factor)
+                    
+                    thumbnail_label.setPixmap(scaled_pixmap)
+                else:
+                    thumbnail_label.setText("Loading...")
+            else:
+                thumbnail_label.setText("Loading...")
+        else:
+            thumbnail_label.setText("No Preview")
+        
+        # Create filename label
+        filename = os.path.basename(image_path) if image_path else list_item.text()
+        # Truncate filename if too long
+        if len(filename) > 15:
+            filename = filename[:12] + "..."
+        
+        filename_label = QLabel(filename)
+        filename_label.setObjectName("thumbnailFilename")
+        filename_label.setAlignment(Qt.AlignCenter)
+        filename_label.setWordWrap(True)
+        
+        # Set smaller font for filename
+        font = filename_label.font()
+        font.setPointSize(8)
+        filename_label.setFont(font)
+        
+        # Style based on processing status
+        status = metadata.get('status', 'raw')
+        if status == 'finished':
+            border_color = '#4caf50'  # Green
+        elif status == 'started':
+            border_color = '#FFA500'  # Orange
+        elif status == 'error':
+            border_color = '#f44336'  # Red
+        elif status == 'sent_to_network':
+            border_color = '#a682fa'  # Purple
+        else:
+            border_color = '#ccc'  # Default gray
+        
+        # Apply selection styling
+        if is_selected:
+            border_color = '#2196F3'
+            border_width = 3
+        else:
+            border_width = 1
+            
+        thumbnail_label.setStyleSheet(f"""
+            QLabel#thumbnailImage {{
+                border: {border_width}px solid {border_color};
+                background: #f5f5f5;
+            }}
+        """)
+        
+        # Connect click handler
+        thumbnail_label.clicked.connect(self._on_thumbnail_clicked)
+        
+        # Add to layout
+        layout.addWidget(thumbnail_label)
+        layout.addWidget(filename_label)
+        
+        return container
+    
+    def _on_thumbnail_clicked(self, item_index):
+        """Handle thumbnail click to select the corresponding image."""
+        # Update selection in the original list widget
+        self.ui.imagesListWidget.setCurrentRow(item_index)
+        
+        # Update selection styling without rebuilding the entire grid
+        if self.is_thumbnail_view_mode:
+            self._refresh_thumbnail_grid()
+    
+    def _refresh_thumbnail_grid(self):
+        """Refresh the thumbnail grid (update selection styling only)."""
+        if not self.is_thumbnail_view_mode or not self.thumbnail_grid_layout:
+            return
+        
+        # Update selection styling for existing thumbnail widgets
+        current_selection = self.ui.imagesListWidget.currentRow()
+        
+        # Iterate through all widgets in the grid layout
+        for i in range(self.thumbnail_grid_layout.count()):
+            layout_item = self.thumbnail_grid_layout.itemAt(i)
+            if layout_item and layout_item.widget():
+                widget = layout_item.widget()
+                
+                # Check if this is a thumbnail container (not a group header)
+                if widget.objectName() == "thumbnailItemContainer":
+                    # Find the ClickableLabel inside this container
+                    thumbnail_label = widget.findChild(ClickableLabel)
+                    if thumbnail_label:
+                        item_index = thumbnail_label.index
+                        is_selected = (item_index == current_selection)
+                        
+                        # Update the border styling based on selection
+                        # Get the current status for border color
+                        if item_index < self.ui.imagesListWidget.count():
+                            list_item = self.ui.imagesListWidget.item(item_index)
+                            if list_item:
+                                metadata = list_item.data(Qt.UserRole)
+                                if not metadata.get('is_group_header', False):
+                                    status = metadata.get('status', 'raw')
+                                    
+                                    # Determine border color based on status
+                                    if status == 'finished':
+                                        border_color = '#4caf50'  # Green
+                                    elif status == 'started':
+                                        border_color = '#FFA500'  # Orange
+                                    elif status == 'error':
+                                        border_color = '#f44336'  # Red
+                                    elif status == 'sent_to_network':
+                                        border_color = '#a682fa'  # Purple
+                                    else:
+                                        border_color = '#ccc'  # Default gray
+                                    
+                                    # Override with selection styling if selected
+                                    if is_selected:
+                                        border_color = '#2196F3'
+                                        border_width = 3
+                                    else:
+                                        border_width = 1
+                                    
+                                    # Apply the styling
+                                    thumbnail_label.setStyleSheet(f"""
+                                        QLabel#thumbnailImage {{
+                                            border: {border_width}px solid {border_color};
+                                            background: #f5f5f5;
+                                        }}
+                                    """)
 
 
 if __name__ == '__main__':

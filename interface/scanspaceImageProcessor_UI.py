@@ -21,9 +21,9 @@ from PySide6.QtWidgets import (QAbstractSpinBox, QApplication, QCheckBox, QCombo
     QGridLayout, QGroupBox, QHBoxLayout, QLabel,
     QLayout, QLineEdit, QListWidget, QListWidgetItem,
     QMainWindow, QMenu, QMenuBar, QProgressBar,
-    QPushButton, QRadioButton, QSizePolicy, QSlider,
-    QSpacerItem, QSpinBox, QStatusBar, QTextEdit,
-    QToolBox, QVBoxLayout, QWidget)
+    QPushButton, QRadioButton, QScrollArea, QSizePolicy,
+    QSlider, QSpacerItem, QSpinBox, QStatusBar,
+    QTextEdit, QToolBox, QVBoxLayout, QWidget)
 
 class Ui_MainWindow(object):
     def setupUi(self, MainWindow):
@@ -63,6 +63,11 @@ class Ui_MainWindow(object):
         self.centralwidget.setObjectName(u"centralwidget")
         self.gridLayout_2 = QGridLayout(self.centralwidget)
         self.gridLayout_2.setObjectName(u"gridLayout_2")
+        self.serverStatusLabel = QLabel(self.centralwidget)
+        self.serverStatusLabel.setObjectName(u"serverStatusLabel")
+
+        self.gridLayout_2.addWidget(self.serverStatusLabel, 2, 0, 1, 4)
+
         self.verticalLayout_4 = QVBoxLayout()
         self.verticalLayout_4.setSpacing(8)
         self.verticalLayout_4.setObjectName(u"verticalLayout_4")
@@ -334,6 +339,39 @@ class Ui_MainWindow(object):
 
         self.verticalLayout_2.addWidget(self.imagesListWidget)
 
+        self.thumbnailContainerScrollArea = QScrollArea(self.frame)
+        self.thumbnailContainerScrollArea.setObjectName(u"thumbnailContainerScrollArea")
+        self.thumbnailContainerScrollArea.setWidgetResizable(True)
+        self.scrollAreaWidgetContents = QWidget()
+        self.scrollAreaWidgetContents.setObjectName(u"scrollAreaWidgetContents")
+        self.scrollAreaWidgetContents.setGeometry(QRect(0, 0, 344, 310))
+        self.thumbnailContainerScrollArea.setWidget(self.scrollAreaWidgetContents)
+
+        self.verticalLayout_2.addWidget(self.thumbnailContainerScrollArea)
+
+        self.frame_3 = QFrame(self.frame)
+        self.frame_3.setObjectName(u"frame_3")
+        self.frame_3.setFrameShape(QFrame.StyledPanel)
+        self.frame_3.setFrameShadow(QFrame.Raised)
+        self.horizontalLayout_9 = QHBoxLayout(self.frame_3)
+        self.horizontalLayout_9.setObjectName(u"horizontalLayout_9")
+        self.displayImagesAsThumbnailsCheckBox = QCheckBox(self.frame_3)
+        self.displayImagesAsThumbnailsCheckBox.setObjectName(u"displayImagesAsThumbnailsCheckBox")
+
+        self.horizontalLayout_9.addWidget(self.displayImagesAsThumbnailsCheckBox)
+
+        self.thumbnailZoomLevelHorizontalSlider = QSlider(self.frame_3)
+        self.thumbnailZoomLevelHorizontalSlider.setObjectName(u"thumbnailZoomLevelHorizontalSlider")
+        self.thumbnailZoomLevelHorizontalSlider.setMinimum(1)
+        self.thumbnailZoomLevelHorizontalSlider.setMaximum(6)
+        self.thumbnailZoomLevelHorizontalSlider.setValue(3)
+        self.thumbnailZoomLevelHorizontalSlider.setOrientation(Qt.Horizontal)
+
+        self.horizontalLayout_9.addWidget(self.thumbnailZoomLevelHorizontalSlider)
+
+
+        self.verticalLayout_2.addWidget(self.frame_3)
+
 
         self.verticalLayout_3.addLayout(self.verticalLayout_2)
 
@@ -356,11 +394,6 @@ class Ui_MainWindow(object):
 
         self.gridLayout_2.addWidget(self.frame, 0, 0, 1, 1)
 
-        self.serverStatusLabel = QLabel(self.centralwidget)
-        self.serverStatusLabel.setObjectName(u"serverStatusLabel")
-
-        self.gridLayout_2.addWidget(self.serverStatusLabel, 1, 0, 1, 4)
-
         self.toolBox = QToolBox(self.centralwidget)
         self.toolBox.setObjectName(u"toolBox")
         sizePolicy = QSizePolicy(QSizePolicy.Preferred, QSizePolicy.Preferred)
@@ -376,6 +409,11 @@ class Ui_MainWindow(object):
         self.colourChartToolsTab.setGeometry(QRect(0, 0, 240, 669))
         self.formLayout_6 = QFormLayout(self.colourChartToolsTab)
         self.formLayout_6.setObjectName(u"formLayout_6")
+        self.supportedColourChartsComboBox = QComboBox(self.colourChartToolsTab)
+        self.supportedColourChartsComboBox.setObjectName(u"supportedColourChartsComboBox")
+
+        self.formLayout_6.setWidget(1, QFormLayout.SpanningRole, self.supportedColourChartsComboBox)
+
         self.setSelectedAsChartPushbutton = QPushButton(self.colourChartToolsTab)
         self.setSelectedAsChartPushbutton.setObjectName(u"setSelectedAsChartPushbutton")
 
@@ -391,33 +429,6 @@ class Ui_MainWindow(object):
 
         self.formLayout_6.setWidget(4, QFormLayout.SpanningRole, self.exportChartConfigPushButton)
 
-        self.precalcChartComboBox = QComboBox(self.colourChartToolsTab)
-        self.precalcChartComboBox.setObjectName(u"precalcChartComboBox")
-
-        self.formLayout_6.setWidget(6, QFormLayout.SpanningRole, self.precalcChartComboBox)
-
-        self.chartPathLineEdit = QLineEdit(self.colourChartToolsTab)
-        self.chartPathLineEdit.setObjectName(u"chartPathLineEdit")
-        self.chartPathLineEdit.setMaximumSize(QSize(250, 16777215))
-
-        self.formLayout_6.setWidget(8, QFormLayout.FieldRole, self.chartPathLineEdit)
-
-        self.label_8 = QLabel(self.colourChartToolsTab)
-        self.label_8.setObjectName(u"label_8")
-        self.label_8.setMinimumSize(QSize(0, 0))
-        self.label_8.setMaximumSize(QSize(120, 16777215))
-        self.label_8.setMargin(1)
-        self.label_8.setIndent(5)
-
-        self.formLayout_6.setWidget(8, QFormLayout.LabelRole, self.label_8)
-
-        self.browseForChartPushbutton = QPushButton(self.colourChartToolsTab)
-        self.browseForChartPushbutton.setObjectName(u"browseForChartPushbutton")
-        self.browseForChartPushbutton.setMinimumSize(QSize(60, 0))
-        self.browseForChartPushbutton.setMaximumSize(QSize(100, 16777215))
-
-        self.formLayout_6.setWidget(9, QFormLayout.FieldRole, self.browseForChartPushbutton)
-
         self.line_2 = QFrame(self.colourChartToolsTab)
         self.line_2.setObjectName(u"line_2")
         sizePolicy1 = QSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
@@ -429,24 +440,99 @@ class Ui_MainWindow(object):
         self.line_2.setFrameShape(QFrame.HLine)
         self.line_2.setFrameShadow(QFrame.Sunken)
 
-        self.formLayout_6.setWidget(7, QFormLayout.SpanningRole, self.line_2)
+        self.formLayout_6.setWidget(5, QFormLayout.SpanningRole, self.line_2)
 
-        self.supportedColourChartsComboBox = QComboBox(self.colourChartToolsTab)
-        self.supportedColourChartsComboBox.setObjectName(u"supportedColourChartsComboBox")
+        self.label_8 = QLabel(self.colourChartToolsTab)
+        self.label_8.setObjectName(u"label_8")
+        self.label_8.setMinimumSize(QSize(0, 0))
+        self.label_8.setMaximumSize(QSize(120, 16777215))
+        self.label_8.setMargin(1)
+        self.label_8.setIndent(5)
 
-        self.formLayout_6.setWidget(1, QFormLayout.SpanningRole, self.supportedColourChartsComboBox)
+        self.formLayout_6.setWidget(6, QFormLayout.LabelRole, self.label_8)
 
-        self.usePrecalcChartCheckbox = QCheckBox(self.colourChartToolsTab)
+        self.chartPathLineEdit = QLineEdit(self.colourChartToolsTab)
+        self.chartPathLineEdit.setObjectName(u"chartPathLineEdit")
+        self.chartPathLineEdit.setMaximumSize(QSize(250, 16777215))
+
+        self.formLayout_6.setWidget(6, QFormLayout.FieldRole, self.chartPathLineEdit)
+
+        self.browseForChartPushbutton = QPushButton(self.colourChartToolsTab)
+        self.browseForChartPushbutton.setObjectName(u"browseForChartPushbutton")
+        self.browseForChartPushbutton.setMinimumSize(QSize(60, 0))
+        self.browseForChartPushbutton.setMaximumSize(QSize(100, 16777215))
+
+        self.formLayout_6.setWidget(7, QFormLayout.FieldRole, self.browseForChartPushbutton)
+
+        self.groupBox_3 = QGroupBox(self.colourChartToolsTab)
+        self.groupBox_3.setObjectName(u"groupBox_3")
+        self.verticalLayout_7 = QVBoxLayout(self.groupBox_3)
+        self.verticalLayout_7.setObjectName(u"verticalLayout_7")
+        self.usePrecalcChartCheckbox = QCheckBox(self.groupBox_3)
         self.usePrecalcChartCheckbox.setObjectName(u"usePrecalcChartCheckbox")
         self.usePrecalcChartCheckbox.setLayoutDirection(Qt.RightToLeft)
 
-        self.formLayout_6.setWidget(5, QFormLayout.LabelRole, self.usePrecalcChartCheckbox)
+        self.verticalLayout_7.addWidget(self.usePrecalcChartCheckbox)
+
+        self.precalcChartComboBox = QComboBox(self.groupBox_3)
+        self.precalcChartComboBox.setObjectName(u"precalcChartComboBox")
+
+        self.verticalLayout_7.addWidget(self.precalcChartComboBox)
+
+        self.verticalSpacer_4 = QSpacerItem(20, 40, QSizePolicy.Minimum, QSizePolicy.Maximum)
+
+        self.verticalLayout_7.addItem(self.verticalSpacer_4)
+
+        self.line_3 = QFrame(self.groupBox_3)
+        self.line_3.setObjectName(u"line_3")
+        self.line_3.setFrameShape(QFrame.HLine)
+        self.line_3.setFrameShadow(QFrame.Sunken)
+
+        self.verticalLayout_7.addWidget(self.line_3)
+
+        self.verticalSpacer_3 = QSpacerItem(20, 40, QSizePolicy.Minimum, QSizePolicy.Maximum)
+
+        self.verticalLayout_7.addItem(self.verticalSpacer_3)
+
+        self.label_3 = QLabel(self.groupBox_3)
+        self.label_3.setObjectName(u"label_3")
+        self.label_3.setFont(font)
+        self.label_3.setAlignment(Qt.AlignCenter)
+
+        self.verticalLayout_7.addWidget(self.label_3)
+
+        self.useSelectedChartForAllGroupsPushbutton = QPushButton(self.groupBox_3)
+        self.useSelectedChartForAllGroupsPushbutton.setObjectName(u"useSelectedChartForAllGroupsPushbutton")
+
+        self.verticalLayout_7.addWidget(self.useSelectedChartForAllGroupsPushbutton)
+
+        self.removeSelectedChartPushbutton = QPushButton(self.groupBox_3)
+        self.removeSelectedChartPushbutton.setObjectName(u"removeSelectedChartPushbutton")
+
+        self.verticalLayout_7.addWidget(self.removeSelectedChartPushbutton)
+
+        self.copyChartPushbutton = QPushButton(self.groupBox_3)
+        self.copyChartPushbutton.setObjectName(u"copyChartPushbutton")
+
+        self.verticalLayout_7.addWidget(self.copyChartPushbutton)
+
+        self.pasteChartPushbutton = QPushButton(self.groupBox_3)
+        self.pasteChartPushbutton.setObjectName(u"pasteChartPushbutton")
+
+        self.verticalLayout_7.addWidget(self.pasteChartPushbutton)
+
+        self.verticalSpacer_2 = QSpacerItem(20, 40, QSizePolicy.Minimum, QSizePolicy.Expanding)
+
+        self.verticalLayout_7.addItem(self.verticalSpacer_2)
+
+
+        self.formLayout_6.setWidget(8, QFormLayout.SpanningRole, self.groupBox_3)
 
         self.dontUseColourChartCheckBox = QCheckBox(self.colourChartToolsTab)
         self.dontUseColourChartCheckBox.setObjectName(u"dontUseColourChartCheckBox")
         self.dontUseColourChartCheckBox.setLayoutDirection(Qt.RightToLeft)
 
-        self.formLayout_6.setWidget(0, QFormLayout.LabelRole, self.dontUseColourChartCheckBox)
+        self.formLayout_6.setWidget(0, QFormLayout.SpanningRole, self.dontUseColourChartCheckBox)
 
         self.toolBox.addItem(self.colourChartToolsTab, u"Colour Chart Tools")
         self.averageExposureToolsTab = QWidget()
@@ -524,6 +610,12 @@ class Ui_MainWindow(object):
         self.imageNamingTab.setObjectName(u"imageNamingTab")
         self.formLayout_4 = QFormLayout(self.imageNamingTab)
         self.formLayout_4.setObjectName(u"formLayout_4")
+        self.useOriginalFilenamesCheckBox = QCheckBox(self.imageNamingTab)
+        self.useOriginalFilenamesCheckBox.setObjectName(u"useOriginalFilenamesCheckBox")
+        self.useOriginalFilenamesCheckBox.setLayoutDirection(Qt.RightToLeft)
+
+        self.formLayout_4.setWidget(0, QFormLayout.SpanningRole, self.useOriginalFilenamesCheckBox)
+
         self.label_5 = QLabel(self.imageNamingTab)
         self.label_5.setObjectName(u"label_5")
 
@@ -547,11 +639,43 @@ class Ui_MainWindow(object):
 
         self.formLayout_4.setWidget(2, QFormLayout.FieldRole, self.imagePaddingSpinBox)
 
-        self.useOriginalFilenamesCheckBox = QCheckBox(self.imageNamingTab)
-        self.useOriginalFilenamesCheckBox.setObjectName(u"useOriginalFilenamesCheckBox")
-        self.useOriginalFilenamesCheckBox.setLayoutDirection(Qt.RightToLeft)
+        self.groupBox_4 = QGroupBox(self.imageNamingTab)
+        self.groupBox_4.setObjectName(u"groupBox_4")
+        self.groupBox_4.setMaximumSize(QSize(16777215, 300))
+        self.verticalLayout_8 = QVBoxLayout(self.groupBox_4)
+        self.verticalLayout_8.setObjectName(u"verticalLayout_8")
+        self.schemaNameLineEdit = QLineEdit(self.groupBox_4)
+        self.schemaNameLineEdit.setObjectName(u"schemaNameLineEdit")
 
-        self.formLayout_4.setWidget(0, QFormLayout.SpanningRole, self.useOriginalFilenamesCheckBox)
+        self.verticalLayout_8.addWidget(self.schemaNameLineEdit)
+
+        self.schemaInfoQTextEdit = QTextEdit(self.groupBox_4)
+        self.schemaInfoQTextEdit.setObjectName(u"schemaInfoQTextEdit")
+        self.schemaInfoQTextEdit.setMaximumSize(QSize(16777215, 200))
+        self.schemaInfoQTextEdit.setReadOnly(True)
+
+        self.verticalLayout_8.addWidget(self.schemaInfoQTextEdit)
+
+        self.label_21 = QLabel(self.groupBox_4)
+        self.label_21.setObjectName(u"label_21")
+
+        self.verticalLayout_8.addWidget(self.label_21)
+
+        self.schemaOutputPathForSelectedLabel = QLabel(self.groupBox_4)
+        self.schemaOutputPathForSelectedLabel.setObjectName(u"schemaOutputPathForSelectedLabel")
+
+        self.verticalLayout_8.addWidget(self.schemaOutputPathForSelectedLabel)
+
+
+        self.formLayout_4.setWidget(3, QFormLayout.SpanningRole, self.groupBox_4)
+
+        self.verticalSpacer_5 = QSpacerItem(20, 40, QSizePolicy.Minimum, QSizePolicy.Expanding)
+
+        self.formLayout_4.setItem(4, QFormLayout.SpanningRole, self.verticalSpacer_5)
+
+        self.verticalSpacer_6 = QSpacerItem(20, 40, QSizePolicy.Minimum, QSizePolicy.Expanding)
+
+        self.formLayout_4.setItem(5, QFormLayout.SpanningRole, self.verticalSpacer_6)
 
         self.toolBox.addItem(self.imageNamingTab, u"Image Naming")
         self.imageEditingTab = QWidget()
@@ -566,7 +690,7 @@ class Ui_MainWindow(object):
         font3.setPointSize(8)
         self.label_17.setFont(font3)
 
-        self.gridLayout.addWidget(self.label_17, 4, 0, 1, 2)
+        self.gridLayout.addWidget(self.label_17, 5, 0, 1, 2)
 
         self.shadowAdjustmentDoubleSpinBox = QDoubleSpinBox(self.imageEditingTab)
         self.shadowAdjustmentDoubleSpinBox.setObjectName(u"shadowAdjustmentDoubleSpinBox")
@@ -574,18 +698,18 @@ class Ui_MainWindow(object):
         self.shadowAdjustmentDoubleSpinBox.setMaximum(1.000000000000000)
         self.shadowAdjustmentDoubleSpinBox.setSingleStep(0.050000000000000)
 
-        self.gridLayout.addWidget(self.shadowAdjustmentDoubleSpinBox, 5, 1, 1, 1)
+        self.gridLayout.addWidget(self.shadowAdjustmentDoubleSpinBox, 6, 1, 1, 1)
 
         self.sharpenHorizontalSlider = QSlider(self.imageEditingTab)
         self.sharpenHorizontalSlider.setObjectName(u"sharpenHorizontalSlider")
         self.sharpenHorizontalSlider.setOrientation(Qt.Horizontal)
 
-        self.gridLayout.addWidget(self.sharpenHorizontalSlider, 12, 0, 1, 2)
+        self.gridLayout.addWidget(self.sharpenHorizontalSlider, 13, 0, 1, 2)
 
         self.resetEditSettingsPushButton = QPushButton(self.imageEditingTab)
         self.resetEditSettingsPushButton.setObjectName(u"resetEditSettingsPushButton")
 
-        self.gridLayout.addWidget(self.resetEditSettingsPushButton, 16, 0, 1, 2)
+        self.gridLayout.addWidget(self.resetEditSettingsPushButton, 17, 0, 1, 2)
 
         self.exposureAdjustmentSlider = QSlider(self.imageEditingTab)
         self.exposureAdjustmentSlider.setObjectName(u"exposureAdjustmentSlider")
@@ -594,12 +718,12 @@ class Ui_MainWindow(object):
         self.exposureAdjustmentSlider.setSingleStep(1)
         self.exposureAdjustmentSlider.setOrientation(Qt.Horizontal)
 
-        self.gridLayout.addWidget(self.exposureAdjustmentSlider, 3, 0, 1, 1)
+        self.gridLayout.addWidget(self.exposureAdjustmentSlider, 4, 0, 1, 1)
 
         self.sharpenImageCheckBox = QCheckBox(self.imageEditingTab)
         self.sharpenImageCheckBox.setObjectName(u"sharpenImageCheckBox")
 
-        self.gridLayout.addWidget(self.sharpenImageCheckBox, 11, 0, 1, 1)
+        self.gridLayout.addWidget(self.sharpenImageCheckBox, 12, 0, 1, 1)
 
         self.highlightAdjustmentDoubleSpinBox = QDoubleSpinBox(self.imageEditingTab)
         self.highlightAdjustmentDoubleSpinBox.setObjectName(u"highlightAdjustmentDoubleSpinBox")
@@ -607,12 +731,16 @@ class Ui_MainWindow(object):
         self.highlightAdjustmentDoubleSpinBox.setMaximum(1.000000000000000)
         self.highlightAdjustmentDoubleSpinBox.setSingleStep(0.010000000000000)
 
-        self.gridLayout.addWidget(self.highlightAdjustmentDoubleSpinBox, 7, 1, 1, 1)
+        self.gridLayout.addWidget(self.highlightAdjustmentDoubleSpinBox, 8, 1, 1, 1)
 
         self.sharpenDoubleSpinBox = QDoubleSpinBox(self.imageEditingTab)
         self.sharpenDoubleSpinBox.setObjectName(u"sharpenDoubleSpinBox")
 
-        self.gridLayout.addWidget(self.sharpenDoubleSpinBox, 11, 1, 1, 1)
+        self.gridLayout.addWidget(self.sharpenDoubleSpinBox, 12, 1, 1, 1)
+
+        self.verticalSpacer = QSpacerItem(20, 40, QSizePolicy.Minimum, QSizePolicy.Expanding)
+
+        self.gridLayout.addItem(self.verticalSpacer, 18, 0, 1, 2)
 
         self.groupBox = QGroupBox(self.imageEditingTab)
         self.groupBox.setObjectName(u"groupBox")
@@ -639,7 +767,7 @@ class Ui_MainWindow(object):
         self.gridLayout_3.addWidget(self.enableWhiteBalanceCheckBox, 0, 0, 1, 2)
 
 
-        self.gridLayout.addWidget(self.groupBox, 0, 0, 1, 2)
+        self.gridLayout.addWidget(self.groupBox, 1, 0, 1, 2)
 
         self.label_10 = QLabel(self.imageEditingTab)
         self.label_10.setObjectName(u"label_10")
@@ -649,12 +777,12 @@ class Ui_MainWindow(object):
         font4.setBold(False)
         self.label_10.setFont(font4)
 
-        self.gridLayout.addWidget(self.label_10, 2, 0, 1, 2)
+        self.gridLayout.addWidget(self.label_10, 3, 0, 1, 2)
 
         self.denoiseDoubleSpinBox = QDoubleSpinBox(self.imageEditingTab)
         self.denoiseDoubleSpinBox.setObjectName(u"denoiseDoubleSpinBox")
 
-        self.gridLayout.addWidget(self.denoiseDoubleSpinBox, 8, 1, 1, 1)
+        self.gridLayout.addWidget(self.denoiseDoubleSpinBox, 9, 1, 1, 1)
 
         self.shadowAdjustmentSlider = QSlider(self.imageEditingTab)
         self.shadowAdjustmentSlider.setObjectName(u"shadowAdjustmentSlider")
@@ -662,12 +790,12 @@ class Ui_MainWindow(object):
         self.shadowAdjustmentSlider.setMaximum(1000)
         self.shadowAdjustmentSlider.setOrientation(Qt.Horizontal)
 
-        self.gridLayout.addWidget(self.shadowAdjustmentSlider, 5, 0, 1, 1)
+        self.gridLayout.addWidget(self.shadowAdjustmentSlider, 6, 0, 1, 1)
 
         self.denoiseImageCheckBox = QCheckBox(self.imageEditingTab)
         self.denoiseImageCheckBox.setObjectName(u"denoiseImageCheckBox")
 
-        self.gridLayout.addWidget(self.denoiseImageCheckBox, 8, 0, 1, 1)
+        self.gridLayout.addWidget(self.denoiseImageCheckBox, 9, 0, 1, 1)
 
         self.line = QFrame(self.imageEditingTab)
         self.line.setObjectName(u"line")
@@ -677,14 +805,14 @@ class Ui_MainWindow(object):
         self.line.setFrameShape(QFrame.HLine)
         self.line.setFrameShadow(QFrame.Sunken)
 
-        self.gridLayout.addWidget(self.line, 13, 0, 1, 2)
+        self.gridLayout.addWidget(self.line, 14, 0, 1, 2)
 
         self.label_18 = QLabel(self.imageEditingTab)
         self.label_18.setObjectName(u"label_18")
         self.label_18.setMaximumSize(QSize(16777215, 30))
         self.label_18.setFont(font3)
 
-        self.gridLayout.addWidget(self.label_18, 6, 0, 1, 2)
+        self.gridLayout.addWidget(self.label_18, 7, 0, 1, 2)
 
         self.highlightAdjustmentSlider = QSlider(self.imageEditingTab)
         self.highlightAdjustmentSlider.setObjectName(u"highlightAdjustmentSlider")
@@ -693,7 +821,7 @@ class Ui_MainWindow(object):
         self.highlightAdjustmentSlider.setValue(0)
         self.highlightAdjustmentSlider.setOrientation(Qt.Horizontal)
 
-        self.gridLayout.addWidget(self.highlightAdjustmentSlider, 7, 0, 1, 1)
+        self.gridLayout.addWidget(self.highlightAdjustmentSlider, 8, 0, 1, 1)
 
         self.exposureAdjustmentDoubleSpinBox = QDoubleSpinBox(self.imageEditingTab)
         self.exposureAdjustmentDoubleSpinBox.setObjectName(u"exposureAdjustmentDoubleSpinBox")
@@ -701,17 +829,78 @@ class Ui_MainWindow(object):
         self.exposureAdjustmentDoubleSpinBox.setMaximum(5.000000000000000)
         self.exposureAdjustmentDoubleSpinBox.setSingleStep(0.250000000000000)
 
-        self.gridLayout.addWidget(self.exposureAdjustmentDoubleSpinBox, 3, 1, 1, 1)
+        self.gridLayout.addWidget(self.exposureAdjustmentDoubleSpinBox, 4, 1, 1, 1)
 
         self.denoiseHorizontalSlider = QSlider(self.imageEditingTab)
         self.denoiseHorizontalSlider.setObjectName(u"denoiseHorizontalSlider")
         self.denoiseHorizontalSlider.setOrientation(Qt.Horizontal)
 
-        self.gridLayout.addWidget(self.denoiseHorizontalSlider, 9, 0, 1, 2)
+        self.gridLayout.addWidget(self.denoiseHorizontalSlider, 10, 0, 1, 2)
 
-        self.verticalSpacer = QSpacerItem(20, 40, QSizePolicy.Minimum, QSizePolicy.Expanding)
+        self.groupBox_5 = QGroupBox(self.imageEditingTab)
+        self.groupBox_5.setObjectName(u"groupBox_5")
+        self.gridLayout_4 = QGridLayout(self.groupBox_5)
+        self.gridLayout_4.setObjectName(u"gridLayout_4")
+        self.label_9 = QLabel(self.groupBox_5)
+        self.label_9.setObjectName(u"label_9")
 
-        self.gridLayout.addItem(self.verticalSpacer, 17, 0, 1, 2)
+        self.gridLayout_4.addWidget(self.label_9, 2, 0, 1, 1)
+
+        self.enableRescaleCheckBox = QCheckBox(self.groupBox_5)
+        self.enableRescaleCheckBox.setObjectName(u"enableRescaleCheckBox")
+
+        self.gridLayout_4.addWidget(self.enableRescaleCheckBox, 0, 0, 1, 1)
+
+        self.frame_2 = QFrame(self.groupBox_5)
+        self.frame_2.setObjectName(u"frame_2")
+        self.frame_2.setFrameShape(QFrame.StyledPanel)
+        self.frame_2.setFrameShadow(QFrame.Raised)
+        self.horizontalLayout_7 = QHBoxLayout(self.frame_2)
+        self.horizontalLayout_7.setObjectName(u"horizontalLayout_7")
+        self.xDimensionOutputSpinbox = QSpinBox(self.frame_2)
+        self.xDimensionOutputSpinbox.setObjectName(u"xDimensionOutputSpinbox")
+
+        self.horizontalLayout_7.addWidget(self.xDimensionOutputSpinbox)
+
+        self.label_19 = QLabel(self.frame_2)
+        self.label_19.setObjectName(u"label_19")
+        self.label_19.setAlignment(Qt.AlignCenter)
+
+        self.horizontalLayout_7.addWidget(self.label_19)
+
+        self.yDiemnsionOutputSpinbox = QSpinBox(self.frame_2)
+        self.yDiemnsionOutputSpinbox.setObjectName(u"yDiemnsionOutputSpinbox")
+
+        self.horizontalLayout_7.addWidget(self.yDiemnsionOutputSpinbox)
+
+
+        self.gridLayout_4.addWidget(self.frame_2, 4, 0, 1, 3)
+
+        self.targetDownsamplePercentDoubleSpinbox = QDoubleSpinBox(self.groupBox_5)
+        self.targetDownsamplePercentDoubleSpinbox.setObjectName(u"targetDownsamplePercentDoubleSpinbox")
+        self.targetDownsamplePercentDoubleSpinbox.setMaximum(100.000000000000000)
+        self.targetDownsamplePercentDoubleSpinbox.setValue(100.000000000000000)
+
+        self.gridLayout_4.addWidget(self.targetDownsamplePercentDoubleSpinbox, 1, 2, 1, 1)
+
+        self.label_11 = QLabel(self.groupBox_5)
+        self.label_11.setObjectName(u"label_11")
+
+        self.gridLayout_4.addWidget(self.label_11, 1, 0, 1, 1)
+
+        self.targetDownsampleMpxDoubleSpinBox = QDoubleSpinBox(self.groupBox_5)
+        self.targetDownsampleMpxDoubleSpinBox.setObjectName(u"targetDownsampleMpxDoubleSpinBox")
+
+        self.gridLayout_4.addWidget(self.targetDownsampleMpxDoubleSpinBox, 2, 2, 1, 1)
+
+        self.label_20 = QLabel(self.groupBox_5)
+        self.label_20.setObjectName(u"label_20")
+        self.label_20.setAlignment(Qt.AlignCenter)
+
+        self.gridLayout_4.addWidget(self.label_20, 3, 0, 1, 3)
+
+
+        self.gridLayout.addWidget(self.groupBox_5, 0, 0, 1, 2)
 
         self.toolBox.addItem(self.imageEditingTab, u"Image Editing")
         self.processExportTab = QWidget()
@@ -845,7 +1034,7 @@ class Ui_MainWindow(object):
 
         self.retranslateUi(MainWindow)
 
-        self.toolBox.setCurrentIndex(1)
+        self.toolBox.setCurrentIndex(0)
         self.toolBox.layout().setSpacing(6)
 
 
@@ -866,6 +1055,7 @@ class Ui_MainWindow(object):
         self.actionVersion_2.setText(QCoreApplication.translate("MainWindow", u"Version 2", None))
         self.actionNetwork_Processing_Monitor.setText(QCoreApplication.translate("MainWindow", u"Network Processing Monitor", None))
         self.actionBatch_Processor.setText(QCoreApplication.translate("MainWindow", u"Batch Processor", None))
+        self.serverStatusLabel.setText(QCoreApplication.translate("MainWindow", u"Server Satus:", None))
         self.showOriginalImagePushbutton.setText(QCoreApplication.translate("MainWindow", u"Show Original Image", None))
 #if QT_CONFIG(tooltip)
         self.flattenChartImagePushButton.setToolTip(QCoreApplication.translate("MainWindow", u"Select the four corners of the chart to straighten it.", None))
@@ -887,18 +1077,24 @@ class Ui_MainWindow(object):
         self.label_6.setText(QCoreApplication.translate("MainWindow", u"Output Directory", None))
         self.browseoutputDirectoryPushbutton.setText(QCoreApplication.translate("MainWindow", u"Browse", None))
         self.label.setText(QCoreApplication.translate("MainWindow", u"Images", None))
-        self.serverStatusLabel.setText(QCoreApplication.translate("MainWindow", u"Server Satus:", None))
+        self.displayImagesAsThumbnailsCheckBox.setText(QCoreApplication.translate("MainWindow", u"Display Thumbnails", None))
+        self.supportedColourChartsComboBox.setPlaceholderText(QCoreApplication.translate("MainWindow", u"Supported Colour Charts", None))
         self.setSelectedAsChartPushbutton.setText(QCoreApplication.translate("MainWindow", u"Set Selected As Chart", None))
         self.manuallySelectChartPushbutton.setText(QCoreApplication.translate("MainWindow", u"Manually Select Chart", None))
         self.exportChartConfigPushButton.setText(QCoreApplication.translate("MainWindow", u"Export Chart Config", None))
+        self.label_8.setText(QCoreApplication.translate("MainWindow", u"Chart Image", None))
+        self.browseForChartPushbutton.setText(QCoreApplication.translate("MainWindow", u"Browse", None))
+        self.groupBox_3.setTitle(QCoreApplication.translate("MainWindow", u"Chart Assignment", None))
+        self.usePrecalcChartCheckbox.setText(QCoreApplication.translate("MainWindow", u"Enable Chart Override", None))
 #if QT_CONFIG(tooltip)
         self.precalcChartComboBox.setToolTip(QCoreApplication.translate("MainWindow", u"Set your custom chart folder in settings.", None))
 #endif // QT_CONFIG(tooltip)
         self.precalcChartComboBox.setPlaceholderText(QCoreApplication.translate("MainWindow", u"Precalculated Chart", None))
-        self.label_8.setText(QCoreApplication.translate("MainWindow", u"Chart Image", None))
-        self.browseForChartPushbutton.setText(QCoreApplication.translate("MainWindow", u"Browse", None))
-        self.supportedColourChartsComboBox.setPlaceholderText(QCoreApplication.translate("MainWindow", u"Supported Colour Charts", None))
-        self.usePrecalcChartCheckbox.setText(QCoreApplication.translate("MainWindow", u"Enable Chart Override", None))
+        self.label_3.setText(QCoreApplication.translate("MainWindow", u"Advanced", None))
+        self.useSelectedChartForAllGroupsPushbutton.setText(QCoreApplication.translate("MainWindow", u"Use Slected Chart for All Groups", None))
+        self.removeSelectedChartPushbutton.setText(QCoreApplication.translate("MainWindow", u"Remove Selected Chart", None))
+        self.copyChartPushbutton.setText(QCoreApplication.translate("MainWindow", u"Copy Chart from Group", None))
+        self.pasteChartPushbutton.setText(QCoreApplication.translate("MainWindow", u"Paste Chart to Group", None))
         self.dontUseColourChartCheckBox.setText(QCoreApplication.translate("MainWindow", u"Don't Use Colour Chart", None))
         self.toolBox.setItemText(self.toolBox.indexOf(self.colourChartToolsTab), QCoreApplication.translate("MainWindow", u"Colour Chart Tools", None))
         self.calculateAverageExposurePushbutton.setText(QCoreApplication.translate("MainWindow", u"Calculate Average Exposure", None))
@@ -913,6 +1109,7 @@ class Ui_MainWindow(object):
         self.exportMaskedImagesCheckBox.setText(QCoreApplication.translate("MainWindow", u"Export Masked Images", None))
         self.label_12.setText(QCoreApplication.translate("MainWindow", u"Highlight Limit", None))
         self.toolBox.setItemText(self.toolBox.indexOf(self.averageExposureToolsTab), QCoreApplication.translate("MainWindow", u"Average Exposure Tools", None))
+        self.useOriginalFilenamesCheckBox.setText(QCoreApplication.translate("MainWindow", u"Use Original Filenames", None))
         self.label_5.setText(QCoreApplication.translate("MainWindow", u"Image Prefix", None))
 #if QT_CONFIG(tooltip)
         self.newImageNameLineEdit.setToolTip(QCoreApplication.translate("MainWindow", u"New Image Name, will be followed by _0001, numbers are based on padding length", None))
@@ -925,7 +1122,27 @@ class Ui_MainWindow(object):
 #if QT_CONFIG(whatsthis)
         self.imagePaddingSpinBox.setWhatsThis("")
 #endif // QT_CONFIG(whatsthis)
-        self.useOriginalFilenamesCheckBox.setText(QCoreApplication.translate("MainWindow", u"Use Original Filenames", None))
+        self.groupBox_4.setTitle(QCoreApplication.translate("MainWindow", u"Schema Naming", None))
+        self.schemaNameLineEdit.setText(QCoreApplication.translate("MainWindow", u"[r]/[o][n4][e]", None))
+        self.schemaInfoQTextEdit.setHtml(QCoreApplication.translate("MainWindow", u"<!DOCTYPE HTML PUBLIC \"-//W3C//DTD HTML 4.0//EN\" \"http://www.w3.org/TR/REC-html40/strict.dtd\">\n"
+"<html><head><meta name=\"qrichtext\" content=\"1\" /><meta charset=\"utf-8\" /><style type=\"text/css\">\n"
+"p, li { white-space: pre-wrap; }\n"
+"hr { height: 1px; border-width: 0; }\n"
+"li.unchecked::marker { content: \"\\2610\"; }\n"
+"li.checked::marker { content: \"\\2612\"; }\n"
+"</style></head><body style=\" font-family:'Segoe UI'; font-size:9pt; font-weight:400; font-style:normal;\">\n"
+"<p style=\" margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;\"><span style=\" font-weight:700;\">[r]</span>: Root folder name</p>\n"
+"<p style=\" margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;\"><span style=\" font-weight:700;\">[s]</span>: Sub folder name (if exists)</p>\n"
+"<p style=\" margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;\"><span sty"
+                        "le=\" font-weight:700;\">[e]</span>: File name extension</p>\n"
+"<p style=\" margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;\"><span style=\" font-weight:700;\">[oc]</span>: Original file name without numbers</p>\n"
+"<p style=\" margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;\"><span style=\" font-weight:700;\">[c]</span>: Custom name from custom input</p>\n"
+"<p style=\" margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;\"><span style=\" font-weight:700;\">[o]</span>: Original file name</p>\n"
+"<p style=\" margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;\"><span style=\" font-weight:700;\">[n]</span>: Image Number</p>\n"
+"<p style=\" margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;\"><span style=\" font-weight:700;\">[/]</sp"
+                        "an>: new folder layer</p></body></html>", None))
+        self.label_21.setText(QCoreApplication.translate("MainWindow", u"Output Path For Selected:", None))
+        self.schemaOutputPathForSelectedLabel.setText(QCoreApplication.translate("MainWindow", u"output_path", None))
         self.toolBox.setItemText(self.toolBox.indexOf(self.imageNamingTab), QCoreApplication.translate("MainWindow", u"Image Naming", None))
         self.label_17.setText(QCoreApplication.translate("MainWindow", u"Shadows", None))
         self.resetEditSettingsPushButton.setText(QCoreApplication.translate("MainWindow", u"Reset", None))
@@ -937,6 +1154,14 @@ class Ui_MainWindow(object):
         self.label_10.setText(QCoreApplication.translate("MainWindow", u"Exposure", None))
         self.denoiseImageCheckBox.setText(QCoreApplication.translate("MainWindow", u"Denoise", None))
         self.label_18.setText(QCoreApplication.translate("MainWindow", u"Highlights", None))
+        self.groupBox_5.setTitle(QCoreApplication.translate("MainWindow", u"Downsample Image", None))
+        self.label_9.setText(QCoreApplication.translate("MainWindow", u"Target Mpx", None))
+        self.enableRescaleCheckBox.setText(QCoreApplication.translate("MainWindow", u"Enable Downsample", None))
+        self.label_19.setText(QCoreApplication.translate("MainWindow", u"by", None))
+        self.targetDownsamplePercentDoubleSpinbox.setSuffix(QCoreApplication.translate("MainWindow", u"%", None))
+        self.label_11.setText(QCoreApplication.translate("MainWindow", u"Target Percent", None))
+        self.targetDownsampleMpxDoubleSpinBox.setSuffix(QCoreApplication.translate("MainWindow", u"mp", None))
+        self.label_20.setText(QCoreApplication.translate("MainWindow", u"Selected Images Output Dimensions", None))
         self.toolBox.setItemText(self.toolBox.indexOf(self.imageEditingTab), QCoreApplication.translate("MainWindow", u"Image Editing", None))
         self.label_16.setText(QCoreApplication.translate("MainWindow", u"Format", None))
         self.bitDepthFrame.setTitle(QCoreApplication.translate("MainWindow", u"Bit Depth", None))

@@ -2429,12 +2429,14 @@ class ProcessingClient:
                     except:
                         break
                 
-                # Restart threads if they died
-                if not self.heartbeat_thread.is_alive():
+                # Restart threads if they died or don't exist
+                if not self.heartbeat_thread or not self.heartbeat_thread.is_alive():
+                    self.log_info("Restarting heartbeat thread after reconnection")
                     self.heartbeat_thread = threading.Thread(target=self._send_heartbeats, daemon=True)
                     self.heartbeat_thread.start()
                     
-                if not self.receive_thread.is_alive():
+                if not self.receive_thread or not self.receive_thread.is_alive():
+                    self.log_info("Restarting receive thread after reconnection")
                     self.receive_thread = threading.Thread(target=self._receive_messages, daemon=True)
                     self.receive_thread.start()
                 
@@ -2458,6 +2460,8 @@ class ProcessingClient:
                     self.log_info(f"All {len(current_alive_workers)}/{expected_worker_count} worker threads are alive after reconnection")
                 
                 # Send an immediate heartbeat to ensure server recognizes this client as available
+                # Add a small delay to ensure all threads are fully started
+                time.sleep(0.1)  
                 try:
                     self._send_immediate_heartbeat()
                     self.log_debug("Sent immediate heartbeat after successful reconnection")

@@ -328,6 +328,147 @@ class FileNamingSchema:
         
         return help_text
 
+    def setup_ui_controls(self, main_window):
+        """
+        Set up UI control connections for schema management.
+        
+        Args:
+            main_window: Reference to MainWindow instance
+        """
+        ui = main_window.ui
+        
+        # Connect schema line edit to validation and preview
+        if hasattr(ui, 'schemaNameLineEdit'):
+            ui.schemaNameLineEdit.textChanged.connect(
+                lambda: self._on_schema_text_changed(main_window)
+            )
+            
+            # Load current schema from settings
+            self._load_schema_from_settings(main_window)
+    
+    def _load_schema_from_settings(self, main_window):
+        """Load schema from settings and populate UI."""
+        from PySide6.QtCore import QSettings
+        
+        settings = QSettings('ScanSpace', 'ImageProcessor')
+        current_schema = settings.value('export_schema', '[r]/[o][n4][e]', type=str)
+        
+        if hasattr(main_window.ui, 'schemaNameLineEdit'):
+            main_window.ui.schemaNameLineEdit.setText(current_schema)
+            
+        # Update preview immediately
+        self._update_schema_preview(main_window)
+    
+    def _on_schema_text_changed(self, main_window):
+        """Handle schema text change with validation and settings save."""
+        from PySide6.QtCore import QSettings, QTimer
+        
+        schema = main_window.ui.schemaNameLineEdit.text()
+        
+        # Save to settings immediately
+        settings = QSettings('ScanSpace', 'ImageProcessor')
+        settings.setValue('export_schema', schema)
+        
+        # Update validation styling
+        self._update_schema_validation(main_window, schema)
+        
+        # Debounced preview update (avoid updating on every keystroke)
+        if not hasattr(self, '_preview_timer'):
+            self._preview_timer = QTimer()
+            self._preview_timer.setSingleShot(True)
+            self._preview_timer.timeout.connect(lambda: self._update_schema_preview(main_window))
+        
+        self._preview_timer.stop()
+        self._preview_timer.start(300)  # 300ms delay
+    
+    def _update_schema_validation(self, main_window, schema):
+        """Update visual validation feedback for schema line edit."""
+        is_valid, errors = self.validate_schema(schema)
+        
+        if not schema:
+            # Empty schema - neutral style
+            main_window.ui.schemaNameLineEdit.setStyleSheet("")
+        elif is_valid:
+            # Valid schema - green border
+            main_window.ui.schemaNameLineEdit.setStyleSheet(
+                "QLineEdit { border: 2px solid #4CAF50; }"
+            )
+        else:
+            # Invalid schema - red border
+            main_window.ui.schemaNameLineEdit.setStyleSheet(
+                "QLineEdit { border: 2px solid #f44336; }"
+            )
+            
+            # Log errors for debugging
+            main_window.log_debug(f"[Schema] Validation errors: {'; '.join(errors)}")
+    
+    def _update_schema_preview(self, main_window):
+        """Update the schema output path preview label."""
+        if not hasattr(main_window.ui, 'schemaOutputPathForSelectedLabel'):
+            return
+            
+        schema = main_window.ui.schemaNameLineEdit.text()
+        
+        # Get currently selected image for preview
+        selected_item = main_window.ui.imagesListWidget.currentItem()
+        if not selected_item:
+            main_window.ui.schemaOutputPathForSelectedLabel.setText("No image selected")
+            return
+            
+        from PySide6.QtCore import Qt
+        metadata = selected_item.data(Qt.UserRole)
+        
+        # Skip group headers
+        if metadata.get('is_group_header', False):
+            main_window.ui.schemaOutputPathForSelectedLabel.setText("Group header selected")
+            return
+            
+        input_path = metadata.get('input_path', '')
+        group_name = metadata.get('group_name', 'All Images')
+        
+        if not input_path:
+            main_window.ui.schemaOutputPathForSelectedLabel.setText("Invalid image path")
+            return
+        
+        try:
+            # Get parameters for preview
+            output_dir = main_window.ui.outputDirectoryLineEdit.text()
+            custom_name = getattr(main_window.ui, 'newImageNameLineEdit', None)
+            custom_name = custom_name.text() if custom_name else ""
+            output_format = main_window.ui.imageFormatComboBox.currentText()
+            root_folder = main_window.ui.rawImagesDirectoryLineEdit.text()
+            
+            # Generate preview using schema
+            preview_output = self.preview_output(
+                schema=schema,
+                input_path=input_path, 
+                custom_name=custom_name,
+                image_number=1,  # Use 1 for preview
+                output_extension=output_format,
+                root_folder=root_folder
+            )
+            
+            # Only show path relative to output directory (don't show full path)
+            if preview_output.startswith('['):
+                # Error case
+                display_text = preview_output
+            else:
+                # Normal case - show only relative path from output root
+                display_text = preview_output
+            
+            main_window.ui.schemaOutputPathForSelectedLabel.setText(display_text)
+            
+        except Exception as e:
+            main_window.ui.schemaOutputPathForSelectedLabel.setText(f"Preview error: {str(e)}")
+            main_window.log_debug(f"[Schema] Preview error: {e}")
+    
+    def update_preview_for_selection_change(self, main_window):
+        """
+        Update the schema preview when image selection changes.
+        Call this from the main window when selection changes.
+        """
+        self._update_schema_preview(main_window)
+
 
 # Helper function for easy integration
 def apply_naming_schema(schema: str, input_path: str, output_base_dir: str,
