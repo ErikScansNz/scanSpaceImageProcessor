@@ -792,7 +792,7 @@ class MainWindow(QMainWindow):
         self.selected_chart_type = None
 
         # Initialize server status
-        self.update_server_status_label("Ready to send jobs")
+        self.update_server_status_label("")
         
         # ────────────────────────────────────────────────────────────
         # 6) Real-time Preview System
