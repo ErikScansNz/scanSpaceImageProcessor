@@ -1719,9 +1719,6 @@ class MainWindow(QMainWindow):
         Args:
             image_groups: Dictionary with group names and image lists
         """
-        # We'll need to import QTreeWidget for proper grouping
-        # For now, let's implement a simple version using the existing QListWidget
-        # with group headers
         
         total_images = 0
         for group_name, image_paths in image_groups.items():
@@ -1731,7 +1728,10 @@ class MainWindow(QMainWindow):
                 header_item.setData(Qt.UserRole, {'is_group_header': True, 'group_name': group_name})
                 header_item.setFlags(header_item.flags() & ~Qt.ItemIsSelectable)  # Make non-selectable
                 # Style the group header
-                header_item.setBackground(QColor('#E3F2FD'))
+                if self.dark_mode:
+                    header_item.setBackground(QColor('#5a5c57'))
+                else:
+                    header_item.setBackground(QColor('#9e7c44'))
                 font = header_item.font()
                 font.setBold(True)
                 header_item.setFont(font)
@@ -2508,18 +2508,69 @@ class MainWindow(QMainWindow):
             f"0 out of {self.total_images} images processed"
         )
 
-        # Create rename map with numbering reset for each group
+        # Create rename map with numbering reset for each output directory
         rename_map = {}
-        for group_name, group_images in image_groups.items():
-            # Number each group starting from 1
-            for idx, image_path in enumerate(group_images):
-                rename_map[image_path] = idx + 1
-        
-        # Log the rename mapping for debugging
-        self.log_debug(f"[Process] Rename map created with per-group numbering:")
-        for group_name, group_images in image_groups.items():
-            group_numbers = [rename_map[path] for path in group_images]
-            self.log_debug(f"  {group_name}: {len(group_images)} images (numbers: {min(group_numbers)}-{max(group_numbers)})")
+        if self.use_export_schema and self.export_schema:
+            # Group images by their output directory based on export schema
+            output_dir_groups = {}  # {output_dir: [image_paths]}
+            
+            for group_name, group_images in image_groups.items():
+                for image_path in group_images:
+                    try:
+                        # Get export schema settings
+                        custom_name = self.ui.newImageNameLineEdit.text() if self.ui.newImageNameLineEdit.text() else ""
+                        root_folder = os.path.basename(inf) if inf else ""
+                        
+                        # Apply naming schema with dummy image number (1) to get directory structure
+                        from ImageProcessor.fileNamingSchema import apply_naming_schema
+                        dummy_output_path = apply_naming_schema(
+                            schema=self.export_schema,
+                            input_path=image_path,
+                            output_base_dir=outf,
+                            custom_name=custom_name,
+                            image_number=1,  # Dummy number, we only care about directory
+                            output_extension=output_ext,
+                            root_folder=root_folder,
+                            group_name=group_name
+                        )
+                        
+                        # Get the directory part of the output path
+                        output_dir = os.path.dirname(dummy_output_path)
+                        
+                        # Group images by output directory
+                        if output_dir not in output_dir_groups:
+                            output_dir_groups[output_dir] = []
+                        output_dir_groups[output_dir].append(image_path)
+                        
+                    except Exception as e:
+                        self.log_error(f"[Rename Map] Error applying schema for {image_path}: {e}")
+                        # Fallback to original group-based numbering for this image
+                        if image_path not in rename_map:
+                            rename_map[image_path] = 1
+            
+            # Create numbering within each output directory
+            for output_dir, dir_images in output_dir_groups.items():
+                for idx, image_path in enumerate(dir_images):
+                    rename_map[image_path] = idx + 1
+            
+            # Log the rename mapping for debugging
+            self.log_debug(f"[Process] Rename map created with per-output-directory numbering:")
+            for output_dir, dir_images in output_dir_groups.items():
+                dir_numbers = [rename_map[path] for path in dir_images]
+                rel_dir = os.path.relpath(output_dir, outf) if output_dir.startswith(outf) else output_dir
+                self.log_debug(f"  {rel_dir}: {len(dir_images)} images (numbers: {min(dir_numbers)}-{max(dir_numbers)})")
+        else:
+            # Fallback to original group-based numbering if no export schema
+            for group_name, group_images in image_groups.items():
+                # Number each group starting from 1
+                for idx, image_path in enumerate(group_images):
+                    rename_map[image_path] = idx + 1
+            
+            # Log the rename mapping for debugging
+            self.log_debug(f"[Process] Rename map created with per-group numbering (no schema):")
+            for group_name, group_images in image_groups.items():
+                group_numbers = [rename_map[path] for path in group_images]
+                self.log_debug(f"  {group_name}: {len(group_images)} images (numbers: {min(group_numbers)}-{max(group_numbers)})")
         name_base = self.ui.newImageNameLineEdit.text().strip()
         padding = self.ui.imagePaddingSpinBox.value()
 

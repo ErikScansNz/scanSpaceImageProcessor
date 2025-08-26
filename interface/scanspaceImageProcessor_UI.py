@@ -641,7 +641,7 @@ class Ui_MainWindow(object):
 
         self.groupBox_4 = QGroupBox(self.imageNamingTab)
         self.groupBox_4.setObjectName(u"groupBox_4")
-        self.groupBox_4.setMaximumSize(QSize(16777215, 300))
+        self.groupBox_4.setMaximumSize(QSize(220, 300))
         self.verticalLayout_8 = QVBoxLayout(self.groupBox_4)
         self.verticalLayout_8.setObjectName(u"verticalLayout_8")
         self.schemaNameLineEdit = QLineEdit(self.groupBox_4)
