@@ -20,7 +20,7 @@ import cv2
 from PIL import Image
 from PySide6.QtCore import QObject, Signal, QRunnable, QEventLoop
 from PySide6.QtGui import QImage, QPixmap
-from PySide6.QtWidgets import QGraphicsPixmapItem
+from PySide6.QtWidgets import QGraphicsPixmapItem, QApplication
 import colour
 from colour import RGB_COLOURSPACES
 
@@ -39,6 +39,27 @@ reference_swatches = colour.XYZ_to_RGB(
     chromatic_adaptation_transform="CAT02",
     apply_cctf_encoding=False,
 )
+
+def _initialize_qt_limits():
+    """
+    Initialize Qt limits to handle large images.
+    Increases allocation limit from default 128MB to 512MB.
+    """
+    try:
+        # Set the Qt image allocation limit environment variable
+        import os
+        os.environ['QT_IMAGEIO_MAXALLOC'] = '512'  # 512MB limit
+        
+        # Also try to set via QImageReader if available
+        from PySide6.QtGui import QImageReader
+        QImageReader.setAllocationLimit(512)  # 512MB limit
+        return True
+    except Exception:
+        pass
+    return False
+
+# Initialize Qt limits on module import
+_initialize_qt_limits()
 
 
 class RawLoadSignals(QObject):
@@ -351,45 +372,68 @@ class ImageLoader:
                     log_callback(f"[ImageLoader] ❌ File does not exist at normalized path: {normalized_path}")
                 pixmap = None
             else:
-                # Try QPixmap first, fallback to PIL if it fails
+                # Try loading with automatic downsampling for large images
                 try:
-                    pixmap = QPixmap(normalized_path)
-                    if not pixmap.isNull():
-                        if log_callback:
-                            log_callback(f"[ImageLoader] ✅ Standard image loaded with QPixmap: {pixmap.width()}x{pixmap.height()}")
-                    else:
-                        if log_callback:
-                            log_callback(f"[ImageLoader] ⚠️ QPixmap returned null, trying PIL fallback for: {normalized_path}")
+                    # First, check image size with PIL to determine if downsampling is needed
+                    with Image.open(normalized_path) as pil_img:
+                        width, height = pil_img.size
+                        total_pixels = width * height
+                        target_pixels = 2_000_000  # 2 megapixels target for display
                         
-                        # Fallback to PIL + QImage conversion
-                        with Image.open(normalized_path) as pil_img:
-                            # Convert PIL image to QImage format
-                            if pil_img.mode == 'RGB':
-                                qformat = QImage.Format_RGB888
-                            elif pil_img.mode == 'RGBA':
-                                qformat = QImage.Format_RGBA8888
-                            else:
-                                # Convert to RGB if other format
-                                pil_img = pil_img.convert('RGB')
-                                qformat = QImage.Format_RGB888
+                        # Check if image needs downsampling
+                        if total_pixels > target_pixels:
+                            if log_callback:
+                                log_callback(f"[ImageLoader] Large image detected: {width}x{height} ({total_pixels/1e6:.1f}MP), downsampling to 2MP")
                             
-                            # Create QImage from PIL data
-                            img_data = pil_img.tobytes()
-                            qimg = QImage(img_data, pil_img.width, pil_img.height, qformat)
-                            pixmap = QPixmap.fromImage(qimg)
+                            # Calculate scale factor to achieve 2MP
+                            scale_factor = np.sqrt(target_pixels / total_pixels)
+                            new_width = int(width * scale_factor)
+                            new_height = int(height * scale_factor)
                             
-                            if not pixmap.isNull():
-                                if log_callback:
-                                    log_callback(f"[ImageLoader] ✅ Standard image loaded with PIL fallback: {pixmap.width()}x{pixmap.height()}")
-                            else:
-                                if log_callback:
-                                    log_callback(f"[ImageLoader] ❌ PIL fallback also failed for: {normalized_path}")
-                                pixmap = None
+                            # Downsample using PIL's high-quality resampling
+                            pil_img.thumbnail((new_width, new_height), Image.Resampling.LANCZOS)
+                            
+                            if log_callback:
+                                log_callback(f"[ImageLoader] Downsampled to: {pil_img.width}x{pil_img.height}")
+                        
+                        # Convert PIL image to QPixmap
+                        if pil_img.mode == 'RGB':
+                            qformat = QImage.Format_RGB888
+                        elif pil_img.mode == 'RGBA':
+                            qformat = QImage.Format_RGBA8888
+                        else:
+                            # Convert to RGB if other format
+                            pil_img = pil_img.convert('RGB')
+                            qformat = QImage.Format_RGB888
+                        
+                        # Create QImage from PIL data
+                        img_data = pil_img.tobytes()
+                        qimg = QImage(img_data, pil_img.width, pil_img.height, pil_img.width * len(pil_img.mode), qformat)
+                        pixmap = QPixmap.fromImage(qimg)
+                        
+                        if not pixmap.isNull():
+                            if log_callback:
+                                log_callback(f"[ImageLoader] ✅ Image loaded successfully: {pixmap.width()}x{pixmap.height()}")
+                        else:
+                            if log_callback:
+                                log_callback(f"[ImageLoader] ❌ Failed to create QPixmap from image")
+                            pixmap = None
                         
                 except Exception as e:
                     if log_callback:
                         log_callback(f"[ImageLoader] ❌ Failed to load standard image: {normalized_path}, error: {str(e)}")
-                    pixmap = None
+                    
+                    # Try direct QPixmap load as last resort (may fail on very large images)
+                    try:
+                        pixmap = QPixmap(normalized_path)
+                        if pixmap.isNull():
+                            pixmap = None
+                        elif log_callback:
+                            log_callback(f"[ImageLoader] ✅ Loaded with QPixmap fallback: {pixmap.width()}x{pixmap.height()}")
+                    except Exception as e2:
+                        if log_callback:
+                            log_callback(f"[ImageLoader] ❌ QPixmap fallback also failed: {str(e2)}")
+                        pixmap = None
 
         # Handle RAW formats
         elif ext in RAW_EXTENSIONS:

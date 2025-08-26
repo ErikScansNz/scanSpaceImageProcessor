@@ -897,11 +897,6 @@ class GlobalAdjustments:
 # Global instance for use across application
 global_adjustments = GlobalAdjustments()
 
-
-# =============================================================================
-# IMAGE RESCALING FUNCTIONS
-# =============================================================================
-
 class RescalingCalculator:
     """
     Handles rescaling calculations for image downsample operations.

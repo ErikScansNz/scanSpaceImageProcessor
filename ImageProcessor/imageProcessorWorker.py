@@ -464,7 +464,7 @@ class ImageCorrectionWorker(QRunnable):
 
     def _get_wb_from_oiio_exif(self, img_path: str) -> float:
         """
-        Extract white balance from EXIF metadata using OpenImageIO.
+        Extract white balance from EXIF metadata using ExifRead.
         
         Args:
             img_path: Path to image file
@@ -473,48 +473,69 @@ class ImageCorrectionWorker(QRunnable):
             float: White balance temperature in Kelvin, or None if not available
         """
         try:
-            from OpenImageIO import ImageInput
+            import exifread
             
-            img_input = ImageInput.open(img_path)
-            if not img_input:
+            # Open file and read EXIF data
+            with open(img_path, 'rb') as f:
+                tags = exifread.process_file(f, details=False)
+            
+            if not tags:
                 return None
-                
-            spec = img_input.spec()
-            img_input.close()
             
             # Try various EXIF white balance fields
             wb_fields = [
-                'Exif:ColorTemperature',
-                'Exif:WhiteBalance', 
-                'EXIF:ColorTemperature',
-                'EXIF:WhiteBalance',
-                'ColorTemperature',
-                'WhiteBalance'
+                'EXIF ColorTemperature',
+                'EXIF WhiteBalance',
+                'Image ColorTemperature',
+                'Image WhiteBalance',
+                'MakerNote ColorTemperature',
+                'MakerNote WhiteBalance',
+                # Canon specific
+                'MakerNote ColorTemp',
+                'MakerNote ColorTempAsShot',
+                # Nikon specific
+                'MakerNote WB_RBLevels',
+                'MakerNote ColorBalance',
             ]
             
             for field in wb_fields:
-                if hasattr(spec, 'getattribute'):
+                if field in tags:
+                    tag_value = tags[field]
+                    # ExifRead returns IfdTag objects, get their values
+                    value_str = str(tag_value.values[0] if hasattr(tag_value, 'values') else tag_value)
+                    
                     try:
-                        value = spec.getattribute(field)
-                        if value is not None:
-                            # Try to convert to temperature
-                            if isinstance(value, (int, float)):
-                                temp = float(value)
-                                if 1000 <= temp <= 12000:  # Reasonable temperature range
+                        # Try to extract numeric value
+                        # Remove any non-numeric characters except decimal point
+                        import re
+                        numeric_match = re.search(r'[\d.]+', value_str)
+                        if numeric_match:
+                            temp = float(numeric_match.group())
+                            if 1000 <= temp <= 12000:  # Reasonable temperature range
+                                return temp
+                    except (ValueError, TypeError):
+                        pass
+            
+            # Try to calculate from RGB multipliers if available
+            # This is common in RAW files
+            for tag_name in ['EXIF WhitePoint', 'Image WhitePoint', 'MakerNote WB_RGBLevels']:
+                if tag_name in tags:
+                    try:
+                        values = tags[tag_name].values
+                        if len(values) >= 2:
+                            # Convert RGB multipliers to approximate color temperature
+                            # This is a rough approximation
+                            r_over_b = float(values[0]) / float(values[1]) if float(values[1]) != 0 else 1
+                            # Approximate mapping from R/B ratio to temperature
+                            if 0.5 <= r_over_b <= 2.0:
+                                temp = 3000 + (r_over_b - 0.5) * 4000
+                                if 1000 <= temp <= 12000:
                                     return temp
-                            elif isinstance(value, str):
-                                # Try to parse string value
-                                try:
-                                    temp = float(value.replace('K', '').replace('k', '').strip())
-                                    if 1000 <= temp <= 12000:
-                                        return temp
-                                except:
-                                    pass
-                    except:
-                        continue
+                    except (ValueError, TypeError, IndexError, AttributeError):
+                        pass
                         
         except Exception as e:
-            self.signals.log.emit(f"[WB] Error reading OIIO EXIF white balance: {e}")
+            self.signals.log.emit(f"[WB] Error reading ExifRead white balance: {e}")
         
         return None
 
