@@ -1229,17 +1229,19 @@ class ProcessingServer:
                     group_name = image_data.get('group', 'All Images')
                     group_data = image_groups.get(group_name, {})
                     chart_swatches = group_data.get('chart_swatches', [])
+                    dont_use_chart = processing_settings.get('dont_use_chart', False)
                     
                     # Validate chart swatches
-                    if not chart_swatches or len(chart_swatches) != 24:
-                        error_msg = f"Group '{group_name}' has invalid chart swatches (length: {len(chart_swatches)})"
-                        jobs_failed.append({
-                            'image_path': image_data.get('full_path', 'unknown'),
-                            'group': group_name,
-                            'error': error_msg
-                        })
-                        self.log_warning(f"[Project] {error_msg}")
-                        continue
+                    if not dont_use_chart:
+                        if not chart_swatches or len(chart_swatches) != 24:
+                            error_msg = f"Group '{group_name}' has invalid chart swatches (length: {len(chart_swatches)})"
+                            jobs_failed.append({
+                                'image_path': image_data.get('full_path', 'unknown'),
+                                'group': group_name,
+                                'error': error_msg
+                            })
+                            self.log_warning(f"[Project] {error_msg}")
+                            continue
                     
                     # Track sequence number per group
                     if group_name not in group_sequence_counters:
@@ -2753,6 +2755,7 @@ class ProcessingClient:
 
             
             # Extract and print each parameter individually with proper defaults
+            dont_use_chart = job.settings.get("dont_use_chart", False)
             jpeg_quality = job.settings.get("jpeg_quality", 100)
             output_format = job.settings.get("output_format", ".jpg") 
             tiff_bitdepth = job.settings.get("tiff_bitdepth", 8)
@@ -2773,7 +2776,7 @@ class ProcessingClient:
             root_folder = job.settings.get("root_folder", "")
             
             # Determine if we're using chart-based correction or manual adjustments
-            use_chart = job.swatches is not None
+            use_chart = job.swatches is not None or dont_use_chart is False
             
             print(f"[DEBUG] Server passing network_output_path: '{output_path}' to worker")
             

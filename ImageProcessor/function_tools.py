@@ -641,6 +641,7 @@ def _build_project_data(self):
         "bit_depth_16": settings.value('bit_depth_16_default', False, type=bool),
         "default_colorspace": settings.value('default_colorspace', 'sRGB', type=str),
         "correct_thumbnails": settings.value('correct_thumbnails', False, type=bool),
+        "dont_use_chart": self.ui.dontUseChartCheckBox.isChecked(),
         "export_schema": settings.value('export_schema', '', type=str),
         "use_export_schema": settings.value('use_export_schema', False, type=bool),
         "custom_name": getattr(self.ui, 'newImageNameLineEdit', None).text() if hasattr(self.ui,
@@ -720,37 +721,48 @@ def _build_project_data(self):
     available_calibrations = {}
     fallback_calibration = None
 
-    if hasattr(self, 'group_calibrations') and self.group_calibrations:
-        for group_name, calibration_data in self.group_calibrations.items():
-            if calibration_data and 'swatches' in calibration_data:
-                available_calibrations[group_name] = calibration_data
-                if fallback_calibration is None:
-                    fallback_calibration = calibration_data
+    dont_use_chart = self.ui.dontUseChartCheckBox.isChecked()
 
-    # Check for global chart swatches as fallback
-    if not available_calibrations and hasattr(self, 'chart_swatches') and self.chart_swatches is not None:
-        fallback_calibration = {
-            'swatches': self.chart_swatches,
-            'file': getattr(self, 'calibration_file', '')
-        }
+    # Skip chart calibration collection if "don't use chart" is checked
+    if not dont_use_chart:
+        if hasattr(self, 'group_calibrations') and self.group_calibrations:
+            for group_name, calibration_data in self.group_calibrations.items():
+                if calibration_data and 'swatches' in calibration_data:
+                    available_calibrations[group_name] = calibration_data
+                    if fallback_calibration is None:
+                        fallback_calibration = calibration_data
 
-    # If no calibration data found anywhere, show error dialog
-    if not available_calibrations and not fallback_calibration:
-        from PySide6.QtWidgets import QMessageBox
-        msg = QMessageBox()
-        msg.setIcon(QMessageBox.Critical)
-        msg.setWindowTitle("No Chart Calibration Found")
-        msg.setText("No color chart calibration data was found in the scene.")
-        msg.setInformativeText("Please load a color chart calibration before exporting to the server.")
-        msg.setStandardButtons(QMessageBox.Ok)
-        msg.exec()
-        return None
+        # Check for global chart swatches as fallback
+        if not available_calibrations and hasattr(self, 'chart_swatches') and self.chart_swatches is not None:
+            fallback_calibration = {
+                'swatches': self.chart_swatches,
+                'file': getattr(self, 'calibration_file', '')
+            }
+
+        # If no calibration data found anywhere, show error dialog
+        if not available_calibrations and not fallback_calibration:
+            from PySide6.QtWidgets import QMessageBox
+            msg = QMessageBox()
+            msg.setIcon(QMessageBox.Critical)
+            msg.setWindowTitle("No Chart Calibration Found")
+            msg.setText("No color chart calibration data was found in the scene.")
+            msg.setInformativeText("Please load a color chart calibration before exporting to the server.")
+            msg.setStandardButtons(QMessageBox.Ok)
+            msg.exec()
+            return None
+    else:
+        # When don't use chart is checked, log that we're skipping calibration
+        self.log_debug("Chart calibration disabled - 'Don't use chart' is checked")
 
     # Build image groups with calibration data
     for group_name in all_groups:
 
-        # Use group-specific calibration if available, otherwise use fallback
-        calibration_data = available_calibrations.get(group_name, fallback_calibration)
+        # Skip calibration if dont_use_chart is checked
+        if dont_use_chart:
+            calibration_data = None
+        else:
+            # Use group-specific calibration if available, otherwise use fallback
+            calibration_data = available_calibrations.get(group_name, fallback_calibration)
 
         if calibration_data and 'swatches' in calibration_data:
             # Convert numpy array to list for JSON serialization
