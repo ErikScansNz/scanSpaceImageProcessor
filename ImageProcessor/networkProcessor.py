@@ -703,9 +703,6 @@ def validate_job_data(job_data: Dict) -> tuple[bool, str]:
     if not os.path.exists(job_data['image_path']):
         return False, f"Input file does not exist: {job_data['image_path']}"
     
-    if not isinstance(job_data['swatches'], list) or len(job_data['swatches']) != 24:
-        return False, "Swatches must be a list of 24 color values"
-    
     return True, "Job data valid"
 
 def convert_to_unc_path(local_path: str) -> str:
@@ -2776,7 +2773,8 @@ class ProcessingClient:
             root_folder = job.settings.get("root_folder", "")
             
             # Determine if we're using chart-based correction or manual adjustments
-            use_chart = job.swatches is not None or dont_use_chart is False
+            # Use chart only if: we have valid swatches AND dont_use_chart is False
+            use_chart = (job.swatches is not None) and (not dont_use_chart)
             
             print(f"[DEBUG] Server passing network_output_path: '{output_path}' to worker")
             
