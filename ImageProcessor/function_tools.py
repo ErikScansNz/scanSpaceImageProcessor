@@ -641,7 +641,7 @@ def _build_project_data(self):
         "bit_depth_16": settings.value('bit_depth_16_default', False, type=bool),
         "default_colorspace": settings.value('default_colorspace', 'sRGB', type=str),
         "correct_thumbnails": settings.value('correct_thumbnails', False, type=bool),
-        "dont_use_chart": self.ui.dontUseChartCheckBox.isChecked(),
+        "dont_use_chart": self.ui.dontUseColourChartCheckBox.isChecked(),
         "export_schema": settings.value('export_schema', '', type=str),
         "use_export_schema": settings.value('use_export_schema', False, type=bool),
         "custom_name": getattr(self.ui, 'newImageNameLineEdit', None).text() if hasattr(self.ui,
@@ -721,7 +721,7 @@ def _build_project_data(self):
     available_calibrations = {}
     fallback_calibration = None
 
-    dont_use_chart = self.ui.dontUseChartCheckBox.isChecked()
+    dont_use_chart = self.ui.dontUseColourChartCheckBox.isChecked()
 
     # Skip chart calibration collection if "don't use chart" is checked
     if not dont_use_chart:
