@@ -191,10 +191,17 @@ def install_python_requirements(dev=False):
         
         # Install requirements
         cmd = [sys.executable, "-m", "pip", "install", "-r", str(requirements_file)]
-        
+
+
         result = subprocess.run(cmd, check=True, capture_output=True, text=True)
         print_colored("✅ Python requirements installed successfully", Colors.GREEN)
-        
+
+        # Install Pywin32
+        cmd = [sys.executable, "-m", "pip", "install", "pywin32"]
+
+        result = subprocess.run(cmd, check=True, capture_output=True, text=True)
+        print_colored("✅ Pywin32 installed successfully", Colors.GREEN)
+
         # Show installed packages
         print("\n📋 Installed packages:")
         subprocess.run([sys.executable, "-m", "pip", "list"], check=False)
