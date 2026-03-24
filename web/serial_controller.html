@@ -1,0 +1,4150 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Pico2W Synth Serial Console</title>
+  <style>
+    :root {
+      --bg0: #11151b;
+      --bg1: #1b232d;
+      --panel: #202a35;
+      --panel-strong: #283443;
+      --line: #45617a;
+      --ink: #d8e7f4;
+      --muted: #8ea6bc;
+      --accent: #f3b855;
+      --good: #39d18d;
+      --warn: #ff6f5c;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      color: var(--ink);
+      font-family: "Rajdhani", "Trebuchet MS", "Segoe UI", sans-serif;
+      background:
+        radial-gradient(70rem 30rem at -10% 0%, rgba(243, 184, 85, 0.22), transparent 65%),
+        radial-gradient(80rem 40rem at 110% 120%, rgba(57, 209, 141, 0.20), transparent 64%),
+        linear-gradient(160deg, var(--bg0), var(--bg1));
+      min-height: 100vh;
+    }
+
+    .app {
+      width: 100%;
+      max-width: none;
+      margin: 0 auto;
+      padding: 12px clamp(8px, 1.2vw, 20px);
+      display: grid;
+      gap: 10px;
+    }
+
+    .topbar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 12px;
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      background: rgba(32, 42, 53, 0.9);
+      backdrop-filter: blur(4px);
+    }
+
+    .brand {
+      font-size: 20px;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--accent);
+      font-weight: 700;
+    }
+
+    .actions {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+    }
+
+    button {
+      border: 1px solid var(--line);
+      background: var(--panel);
+      color: var(--ink);
+      border-radius: 10px;
+      padding: 8px 12px;
+      font: inherit;
+      font-weight: 700;
+      letter-spacing: 0.03em;
+      cursor: pointer;
+      transition: transform 100ms ease, border-color 100ms ease, background 100ms ease;
+    }
+
+    button:hover:not(:disabled) {
+      border-color: var(--accent);
+      transform: translateY(-1px);
+    }
+
+    button:disabled {
+      opacity: 0.5;
+      cursor: default;
+    }
+
+    .primary {
+      background: linear-gradient(180deg, #d49f45, #bc8731);
+      color: #14191f;
+      border-color: #cc9842;
+    }
+
+    .synth-shell {
+      display: grid;
+      gap: 10px;
+      position: relative;
+      overflow: hidden;
+      background:
+        linear-gradient(160deg, rgba(32, 42, 53, 0.95), rgba(20, 27, 36, 0.95)),
+        radial-gradient(40rem 20rem at 5% -20%, rgba(75, 195, 255, 0.14), transparent 70%),
+        radial-gradient(44rem 22rem at 100% 100%, rgba(243, 184, 85, 0.10), transparent 72%);
+    }
+
+    .synth-shell::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      background: repeating-linear-gradient(
+        -45deg,
+        rgba(255, 255, 255, 0.018),
+        rgba(255, 255, 255, 0.018) 8px,
+        transparent 8px,
+        transparent 16px
+      );
+      opacity: 0.35;
+    }
+
+    .panel {
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      background: rgba(32, 42, 53, 0.94);
+      padding: 10px;
+    }
+
+    .status-row {
+      display: grid;
+      grid-template-columns: 1fr auto auto;
+      gap: 8px;
+      align-items: center;
+      margin-bottom: 8px;
+      font-size: 13px;
+      position: relative;
+      z-index: 1;
+    }
+
+    .status-pill {
+      border-radius: 999px;
+      border: 1px solid var(--line);
+      padding: 4px 9px;
+      font-weight: 700;
+      justify-self: start;
+    }
+
+    .ok {
+      color: var(--good);
+      border-color: rgba(57, 209, 141, 0.45);
+      background: rgba(57, 209, 141, 0.08);
+    }
+
+    .bad {
+      color: var(--warn);
+      border-color: rgba(255, 111, 92, 0.45);
+      background: rgba(255, 111, 92, 0.08);
+    }
+
+    .signal-flow {
+      position: relative;
+      z-index: 1;
+      display: grid;
+      grid-template-columns: auto minmax(20px, 1fr) auto minmax(20px, 1fr) auto minmax(20px, 1fr) auto minmax(20px, 1fr) auto minmax(20px, 1fr) auto;
+      align-items: center;
+      gap: 8px;
+      border: 1px solid rgba(83, 109, 132, 0.65);
+      border-radius: 12px;
+      background: rgba(14, 20, 29, 0.75);
+      padding: 8px 10px;
+      margin-bottom: 2px;
+    }
+
+    .flow-node {
+      text-align: center;
+      font-size: 12px;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      border: 1px solid rgba(86, 113, 137, 0.8);
+      border-radius: 999px;
+      padding: 4px 8px;
+      background: rgba(38, 53, 70, 0.9);
+      color: #d8e7f4;
+      font-weight: 700;
+      white-space: nowrap;
+    }
+
+    .flow-node.osc { border-color: rgba(75, 195, 255, 0.7); color: #9be2ff; }
+    .flow-node.mix { border-color: rgba(125, 199, 255, 0.6); color: #b7e6ff; }
+    .flow-node.filter { border-color: rgba(65, 224, 188, 0.65); color: #8af1d8; }
+    .flow-node.amp { border-color: rgba(255, 190, 120, 0.72); color: #ffd8a4; }
+    .flow-node.fx { border-color: rgba(245, 124, 168, 0.72); color: #ffc3dd; }
+    .flow-node.out { border-color: rgba(199, 226, 110, 0.7); color: #dff3a0; }
+
+    .flow-link {
+      height: 2px;
+      border-radius: 999px;
+      background: linear-gradient(90deg, rgba(113, 166, 208, 0.25), rgba(113, 166, 208, 0.95), rgba(113, 166, 208, 0.25));
+    }
+
+    .panel-sections {
+      position: relative;
+      z-index: 1;
+      display: grid;
+      --cluster-width: 360px;
+      grid-template-columns: repeat(auto-fill, minmax(min(100%, var(--cluster-width)), var(--cluster-width)));
+      grid-auto-flow: row dense;
+      justify-content: start;
+      align-items: start;
+      gap: 10px;
+      margin-bottom: 2px;
+    }
+
+    .synth-section {
+      --section-accent: #8ea6bc;
+      grid-column: span 12;
+      border: 1px solid rgba(88, 113, 136, 0.74);
+      border-radius: 12px;
+      background: linear-gradient(155deg, rgba(29, 40, 52, 0.9), rgba(22, 30, 40, 0.92));
+      padding: 8px;
+      display: grid;
+      gap: 8px;
+      box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.02);
+    }
+
+    .synth-section.section-osc {
+      --section-accent: #4bc3ff;
+      background: linear-gradient(160deg, rgba(21, 54, 78, 0.48), rgba(16, 33, 46, 0.92));
+    }
+
+    .synth-section.section-filter {
+      --section-accent: #41e0bc;
+      background: linear-gradient(160deg, rgba(17, 70, 58, 0.48), rgba(16, 37, 35, 0.92));
+    }
+
+    .synth-section.section-env {
+      --section-accent: #f5ca6d;
+      background: linear-gradient(160deg, rgba(88, 57, 23, 0.42), rgba(40, 31, 19, 0.92));
+    }
+
+    .synth-section.section-lfo {
+      --section-accent: #d495ff;
+      background: linear-gradient(160deg, rgba(68, 35, 92, 0.45), rgba(35, 26, 48, 0.92));
+    }
+
+    .synth-section.section-fx {
+      --section-accent: #f57ca8;
+      background: linear-gradient(160deg, rgba(88, 26, 48, 0.46), rgba(46, 22, 31, 0.93));
+    }
+
+    .synth-section.section-amp {
+      --section-accent: #ffbb78;
+      background: linear-gradient(160deg, rgba(92, 52, 18, 0.46), rgba(44, 31, 19, 0.93));
+    }
+
+    .synth-section.section-system {
+      --section-accent: #c7e26e;
+      background: linear-gradient(160deg, rgba(58, 79, 20, 0.42), rgba(31, 40, 19, 0.92));
+    }
+
+    .section-head {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: 10px;
+      padding-bottom: 6px;
+      border-bottom: 1px solid rgba(117, 143, 168, 0.45);
+    }
+
+    .section-title {
+      margin: 0;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      font-size: 14px;
+      color: var(--section-accent);
+    }
+
+    .section-subtitle {
+      margin: 2px 0 0;
+      color: #a9bed1;
+      font-size: 11px;
+      letter-spacing: 0.04em;
+    }
+
+    .section-mode {
+      border: 1px solid rgba(117, 143, 168, 0.55);
+      border-radius: 999px;
+      padding: 2px 8px;
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: #b3cbe0;
+      background: rgba(19, 28, 38, 0.75);
+      white-space: nowrap;
+    }
+
+    .section-chain {
+      display: flex;
+      gap: 6px;
+      align-items: center;
+    }
+
+    .chain-node {
+      border: 1px solid rgba(117, 143, 168, 0.62);
+      border-radius: 999px;
+      padding: 2px 8px;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      font-size: 10px;
+      color: #d3e6f7;
+      background: rgba(17, 26, 35, 0.7);
+      text-align: center;
+    }
+
+    .chain-link {
+      flex: 1;
+      min-width: 16px;
+      height: 2px;
+      border-radius: 999px;
+      background: linear-gradient(90deg, rgba(151, 177, 203, 0.15), rgba(151, 177, 203, 0.95), rgba(151, 177, 203, 0.15));
+    }
+
+    .section-controls {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(174px, 1fr));
+      gap: 8px;
+    }
+
+    .section-controls.osc-groups {
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      align-items: start;
+    }
+
+    .osc-group {
+      border: 1px solid rgba(78, 118, 148, 0.7);
+      border-radius: 10px;
+      background: linear-gradient(160deg, rgba(31, 47, 63, 0.92), rgba(20, 32, 44, 0.92));
+      padding: 8px;
+      display: grid;
+      gap: 8px;
+      min-height: 100%;
+    }
+
+    .osc-group.osc1-layout .osc-group-controls {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      align-items: start;
+    }
+
+    .osc-group.osc1-layout .card.param-osc1_level {
+      grid-column: 1 / -1;
+    }
+
+    .osc-group-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      border-bottom: 1px solid rgba(108, 137, 164, 0.45);
+      padding-bottom: 4px;
+    }
+
+    .osc-group-title {
+      margin: 0;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      font-size: 12px;
+      color: #9be2ff;
+    }
+
+    .osc-group-meta {
+      font-size: 10px;
+      letter-spacing: 0.07em;
+      text-transform: uppercase;
+      color: #9ab2c7;
+    }
+
+    .osc-group-controls {
+      display: grid;
+      gap: 8px;
+    }
+
+    .osc-card .guide {
+      min-height: 1.2em;
+    }
+
+    .osc-card {
+      grid-template-rows: auto auto 1fr auto;
+      align-content: start;
+    }
+
+    .osc-card .knob-wrap {
+      place-items: start center;
+      align-self: start;
+    }
+
+    .osc-card .slider-wrap {
+      align-self: start;
+    }
+
+    .osc-extras {
+      grid-column: 1 / -1;
+      margin-top: 8px;
+      border-top: 1px solid rgba(108, 137, 164, 0.4);
+      padding-top: 8px;
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+      gap: 8px;
+    }
+
+    .section-empty {
+      border: 1px dashed rgba(117, 143, 168, 0.55);
+      border-radius: 10px;
+      color: #9ab2c7;
+      font-size: 12px;
+      padding: 10px;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      text-align: center;
+    }
+
+    .section-osc { grid-column: span 2; }
+    .section-filter { grid-column: span 1; }
+    .section-env { grid-column: span 1; }
+    .section-lfo { grid-column: span 1; }
+    .section-fx { grid-column: span 1; }
+    .section-amp { grid-column: span 1; }
+    .section-system { grid-column: span 1; }
+
+    .keyboard-panel,
+    .telemetry-grid {
+      position: relative;
+      z-index: 1;
+    }
+
+    .keyboard-panel {
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: rgba(27, 37, 48, 0.9);
+      padding: 8px;
+      position: sticky;
+      top: 8px;
+      z-index: 7;
+      box-shadow: 0 8px 20px rgba(5, 10, 16, 0.35);
+    }
+
+    .keyboard-toolbar {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 8px;
+    }
+
+    .keyboard-toolbar label {
+      font-size: 12px;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .keyboard-toolbar select,
+    .keyboard-toolbar input[type="range"] {
+      background: #1b2633;
+      color: var(--ink);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      font: inherit;
+      padding: 2px 6px;
+    }
+
+    .keyboard-toolbar input[type="range"] {
+      width: 100px;
+      padding: 0;
+    }
+
+    .keyboard-toolbar .chord-toggle {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 4px 8px;
+      background: rgba(20, 30, 41, 0.8);
+      color: #c6d9ea;
+      text-transform: none;
+      letter-spacing: 0.02em;
+      gap: 8px;
+    }
+
+    .keyboard-toolbar .chord-toggle input[type="checkbox"] {
+      accent-color: #f3b855;
+      width: 14px;
+      height: 14px;
+      margin: 0;
+    }
+
+    .keyboard-meta {
+      margin-left: auto;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .keyboard {
+      overflow-x: auto;
+      padding-bottom: 4px;
+      white-space: nowrap;
+    }
+
+    .keyboard-octave {
+      position: relative;
+      display: inline-block;
+      width: 196px;
+      height: 122px;
+      margin-right: 2px;
+      border: 1px solid #2e4258;
+      border-radius: 8px;
+      background: #0f1620;
+      overflow: hidden;
+    }
+
+    .piano-key {
+      position: absolute;
+      border: 1px solid #203547;
+      border-radius: 0 0 6px 6px;
+      cursor: pointer;
+      user-select: none;
+      touch-action: none;
+      display: flex;
+      align-items: flex-end;
+      justify-content: center;
+      font-size: 10px;
+      letter-spacing: 0.03em;
+      padding-bottom: 6px;
+    }
+
+    .piano-key.white {
+      width: 28px;
+      height: 120px;
+      background: linear-gradient(180deg, #f6f9ff, #dce7f2);
+      color: #3c4d60;
+      z-index: 1;
+    }
+
+    .piano-key.black {
+      width: 18px;
+      height: 72px;
+      background: linear-gradient(180deg, #2b3b4c, #141e2a);
+      border-color: #3a4d61;
+      color: #98afc5;
+      z-index: 3;
+    }
+
+    .piano-key.white.active {
+      background: linear-gradient(180deg, #ffe0a7, #f0c168);
+      color: #3d2a04;
+    }
+
+    .piano-key.black.active {
+      background: linear-gradient(180deg, #f0c168, #b1812d);
+      color: #2a1a00;
+    }
+
+    .card {
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: var(--panel-strong);
+      padding: 8px;
+      min-height: 130px;
+      display: grid;
+      grid-template-rows: auto 1fr auto;
+      gap: 6px;
+    }
+
+    .card-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      gap: 8px;
+    }
+
+    .name {
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      font-size: 12px;
+      color: var(--muted);
+    }
+
+    .ctrl-type {
+      border: 1px solid rgba(69, 97, 122, 0.9);
+      border-radius: 999px;
+      padding: 1px 7px;
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: #9db5ca;
+      background: rgba(22, 33, 46, 0.75);
+    }
+
+    .value {
+      justify-self: end;
+      font-size: 13px;
+      font-weight: 700;
+      color: var(--accent);
+    }
+
+    .knob-wrap {
+      display: grid;
+      place-items: center;
+    }
+
+    .slider-wrap {
+      display: grid;
+      align-items: center;
+      padding: 0 4px;
+    }
+
+    .level-slider {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 100%;
+      height: 14px;
+      border-radius: 999px;
+      border: 1px solid rgba(84, 114, 140, 0.9);
+      background:
+        linear-gradient(90deg,
+          rgba(243, 184, 85, 0.95) 0%,
+          rgba(243, 184, 85, 0.95) var(--slider-fill, 0%),
+          rgba(50, 70, 93, 0.95) var(--slider-fill, 0%),
+          rgba(50, 70, 93, 0.95) 100%);
+      outline: none;
+      cursor: pointer;
+    }
+
+    .level-slider::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      width: 12px;
+      height: 24px;
+      border-radius: 6px;
+      border: 1px solid #f2be63;
+      background: #faf3e6;
+      box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.18);
+    }
+
+    .level-slider::-moz-range-thumb {
+      width: 12px;
+      height: 24px;
+      border-radius: 6px;
+      border: 1px solid #f2be63;
+      background: #faf3e6;
+    }
+
+	    .knob {
+	      -webkit-appearance: none;
+	      appearance: none;
+      width: 82px;
+      height: 82px;
+      border-radius: 50%;
+	      border: 1px solid var(--line);
+	      background:
+	        conic-gradient(from -180deg,
+	          var(--accent) 0deg var(--knob-angle, 0deg),
+	          #32465d var(--knob-angle, 0deg) 360deg),
+	        radial-gradient(circle at 45% 40%, #7188a0, #3a4b5f 60%, #2a3646);
+      cursor: pointer;
+      outline: none;
+      padding: 0;
+    }
+
+    .knob::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      width: 6px;
+      height: 26px;
+      border-radius: 4px;
+      background: #faf3e6;
+      border: 1px solid #f2be63;
+      box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.15);
+      margin-top: 28px;
+    }
+
+    .knob::-moz-range-thumb {
+      width: 6px;
+      height: 26px;
+      border-radius: 4px;
+      background: #faf3e6;
+      border: 1px solid #f2be63;
+    }
+
+    .switch {
+      align-self: center;
+      justify-self: center;
+      width: 74px;
+      height: 34px;
+      border-radius: 999px;
+      background: #304255;
+      border: 1px solid var(--line);
+      position: relative;
+      cursor: pointer;
+    }
+
+    .switch::after {
+      content: "";
+      position: absolute;
+      top: 3px;
+      left: 3px;
+      width: 26px;
+      height: 26px;
+      border-radius: 50%;
+      background: #dce8f1;
+      transition: transform 120ms ease;
+    }
+
+    .switch.on {
+      background: rgba(57, 209, 141, 0.25);
+      border-color: rgba(57, 209, 141, 0.5);
+    }
+
+    .switch.on::after {
+      transform: translateX(38px);
+    }
+
+    .switch-note {
+      text-align: center;
+      color: var(--muted);
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+    }
+
+    .toggle {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      overflow: hidden;
+      background: #243041;
+    }
+
+    .toggle-btn {
+      border: 0;
+      border-right: 1px solid #33495f;
+      border-radius: 0;
+      background: transparent;
+      color: #9cb3c7;
+      padding: 8px 6px;
+      font-size: 11px;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+    }
+
+    .toggle-btn:last-child {
+      border-right: 0;
+    }
+
+    .toggle-btn.active {
+      background: rgba(57, 209, 141, 0.24);
+      color: #d9f4e8;
+    }
+
+    .knob.click-knob {
+      border-color: #5d7a95;
+      box-shadow: 0 0 0 2px rgba(23, 35, 47, 0.5), 0 0 0 1px rgba(157, 181, 202, 0.2) inset;
+    }
+
+    .guide {
+      color: #a7bccf;
+      font-size: 11px;
+      line-height: 1.2;
+      min-height: 2.4em;
+      letter-spacing: 0.01em;
+    }
+
+    .knob-wrap.inactive {
+      opacity: 0.55;
+      filter: saturate(0.75);
+    }
+
+    .viz-card {
+      min-height: 172px;
+      grid-template-rows: auto auto auto;
+      gap: 8px;
+    }
+
+    .viz-frame {
+      border: 1px solid rgba(79, 105, 129, 0.85);
+      border-radius: 10px;
+      background:
+        linear-gradient(180deg, rgba(23, 35, 48, 0.92), rgba(16, 25, 35, 0.94)),
+        repeating-linear-gradient(
+          0deg,
+          rgba(151, 182, 210, 0.06) 0px,
+          rgba(151, 182, 210, 0.06) 1px,
+          transparent 1px,
+          transparent 14px
+        );
+      padding: 4px;
+    }
+
+    .viz-canvas {
+      display: block;
+      width: 100%;
+      height: 94px;
+      border-radius: 7px;
+      background: rgba(8, 13, 19, 0.35);
+    }
+
+    .viz-caption {
+      color: #a7bccf;
+      font-size: 11px;
+      line-height: 1.2;
+      min-height: 1.2em;
+      letter-spacing: 0.01em;
+    }
+
+    .mono {
+      font-family: "JetBrains Mono", "Consolas", "Menlo", monospace;
+      font-size: 12px;
+    }
+
+    .screen {
+      height: 195px;
+      border: 1px solid #2f4a5f;
+      border-radius: 10px;
+      padding: 10px;
+      background:
+        repeating-linear-gradient(180deg, rgba(17, 53, 40, 0.84), rgba(17, 53, 40, 0.84) 13px, rgba(13, 40, 31, 0.86) 13px, rgba(13, 40, 31, 0.86) 26px);
+      color: #94f7b6;
+      white-space: pre;
+      overflow: auto;
+      box-shadow: inset 0 0 30px rgba(0, 0, 0, 0.35);
+      margin-bottom: 8px;
+    }
+
+    .telemetry-grid {
+      display: grid;
+      grid-template-columns: 1.2fr 1fr 1fr;
+      gap: 8px;
+      align-items: stretch;
+    }
+
+    .stats {
+      margin-bottom: 8px;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      padding: 8px;
+      background: #1c2531;
+    }
+
+    .stats h3 {
+      margin: 0 0 6px;
+      font-size: 13px;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+    }
+
+    .stats-grid {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 2px 8px;
+      font-size: 12px;
+    }
+
+    .log {
+      height: 255px;
+      overflow: auto;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      padding: 8px;
+      background: #161d27;
+      line-height: 1.3;
+    }
+
+    @media (max-width: 1180px) {
+      .section-controls.osc-groups {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+      .telemetry-grid {
+        grid-template-columns: 1fr;
+      }
+      .screen,
+      .log {
+        height: 200px;
+      }
+    }
+
+    @media (max-width: 980px) {
+      .synth-section {
+        grid-column: span 1;
+      }
+
+      .status-row {
+        grid-template-columns: 1fr;
+      }
+
+      .section-controls.osc-groups {
+        grid-template-columns: 1fr;
+      }
+
+
+      .signal-flow {
+        grid-template-columns: 1fr;
+        gap: 4px;
+        padding: 8px;
+      }
+
+      .flow-link {
+        height: 8px;
+        width: 2px;
+        justify-self: center;
+        background: linear-gradient(180deg, rgba(113, 166, 208, 0.25), rgba(113, 166, 208, 0.95), rgba(113, 166, 208, 0.25));
+      }
+    }
+  </style>
+</head>
+<body>
+  <main class="app">
+    <header class="topbar">
+      <div class="brand">Pico2W Synth Serial</div>
+      <div class="actions">
+        <button id="connectBtn" class="primary">Connect USB</button>
+        <button id="disconnectBtn" disabled>Disconnect</button>
+        <button id="transportBtn" title="Toggle between USB hardware and local emulator">Mode: USB</button>
+        <button id="uiModeBtn" title="Toggle control density">Simple Mode</button>
+        <button id="metaBtn" disabled>META</button>
+        <button id="stateBtn" disabled>PUSH ALL</button>
+        <button id="statsBtn" disabled>STATS</button>
+      </div>
+    </header>
+
+    <section class="panel synth-shell">
+      <div class="status-row">
+        <span id="statusPill" class="status-pill bad">Disconnected</span>
+        <span id="portInfo" class="mono">Port: --</span>
+        <span id="ioInfo" class="mono">TX 0 | RX 0</span>
+      </div>
+      <section class="keyboard-panel">
+        <div class="keyboard-toolbar">
+          <label>Start
+            <select id="kbStartOct">
+              <option value="1">C1</option>
+              <option value="2" selected>C2</option>
+              <option value="3">C3</option>
+              <option value="4">C4</option>
+              <option value="5">C5</option>
+              <option value="6">C6</option>
+            </select>
+          </label>
+          <label>Velocity
+            <input id="kbVelocity" type="range" min="1" max="127" value="100">
+          </label>
+          <label class="chord-toggle">
+            <input id="kbChordMode" type="checkbox">
+            Auto Chord
+          </label>
+          <label>Root
+            <select id="kbChordRoot">
+              <option value="0" selected>C</option>
+              <option value="1">C#</option>
+              <option value="2">D</option>
+              <option value="3">D#</option>
+              <option value="4">E</option>
+              <option value="5">F</option>
+              <option value="6">F#</option>
+              <option value="7">G</option>
+              <option value="8">G#</option>
+              <option value="9">A</option>
+              <option value="10">A#</option>
+              <option value="11">B</option>
+            </select>
+          </label>
+          <label>Oct
+            <select id="kbChordOct">
+              <option value="1">1</option>
+              <option value="2">2</option>
+              <option value="3" selected>3</option>
+              <option value="4">4</option>
+              <option value="5">5</option>
+              <option value="6">6</option>
+            </select>
+          </label>
+          <label>Chord
+            <select id="kbChordType">
+              <option value="major" selected>Major</option>
+              <option value="minor">Minor</option>
+              <option value="dom7">Dom7</option>
+              <option value="maj7">Maj7</option>
+              <option value="min7">Min7</option>
+              <option value="sus2">Sus2</option>
+              <option value="sus4">Sus4</option>
+              <option value="dim">Dim</option>
+              <option value="aug">Aug</option>
+              <option value="power">Power</option>
+            </select>
+          </label>
+          <button id="kbPanicBtn" type="button" disabled>PANIC</button>
+          <span class="keyboard-meta mono" id="keyboardHint">z-m / q-u rows = notes</span>
+        </div>
+        <div id="keyboard" class="keyboard"></div>
+      </section>
+      <section class="signal-flow mono">
+        <span class="flow-node osc">OSC</span>
+        <span class="flow-link"></span>
+        <span class="flow-node mix">MIX</span>
+        <span class="flow-link"></span>
+        <span class="flow-node filter">FILTER</span>
+        <span class="flow-link"></span>
+        <span class="flow-node amp">AMP</span>
+        <span class="flow-link"></span>
+        <span class="flow-node fx">FX</span>
+        <span class="flow-link"></span>
+        <span class="flow-node out">OUT</span>
+      </section>
+      <section id="panelSections" class="panel-sections"></section>
+      <section class="telemetry-grid">
+        <div id="screen" class="screen mono">WAITING FOR META...</div>
+        <section class="stats mono">
+          <h3>Runtime Stats</h3>
+          <div class="stats-grid" id="statsGrid">
+            <span>queue_depth</span><span>--</span>
+            <span>dropped_midi</span><span>--</span>
+            <span>dropped_web</span><span>--</span>
+            <span>dropped_hardware</span><span>--</span>
+            <span>audio_overruns</span><span>--</span>
+          </div>
+        </section>
+        <div id="log" class="log mono"></div>
+      </section>
+    </section>
+  </main>
+
+  <script>
+    const VERBOSE_IO_LOG = false;
+    const connectBtn = document.getElementById("connectBtn");
+    const disconnectBtn = document.getElementById("disconnectBtn");
+    const transportBtn = document.getElementById("transportBtn");
+    const uiModeBtn = document.getElementById("uiModeBtn");
+    const metaBtn = document.getElementById("metaBtn");
+    const stateBtn = document.getElementById("stateBtn");
+    const statsBtn = document.getElementById("statsBtn");
+    const statusPill = document.getElementById("statusPill");
+    const portInfo = document.getElementById("portInfo");
+    const ioInfo = document.getElementById("ioInfo");
+    const panelSectionsEl = document.getElementById("panelSections");
+    const screenEl = document.getElementById("screen");
+    const logEl = document.getElementById("log");
+    const statsGrid = document.getElementById("statsGrid");
+    const keyboardEl = document.getElementById("keyboard");
+    const kbStartOctEl = document.getElementById("kbStartOct");
+    const kbVelocityEl = document.getElementById("kbVelocity");
+    const kbChordModeEl = document.getElementById("kbChordMode");
+    const kbChordRootEl = document.getElementById("kbChordRoot");
+    const kbChordOctEl = document.getElementById("kbChordOct");
+    const kbChordTypeEl = document.getElementById("kbChordType");
+    const kbPanicBtn = document.getElementById("kbPanicBtn");
+    const keyboardHintEl = document.getElementById("keyboardHint");
+
+    let port = null;
+    let reader = null;
+    let writer = null;
+    let emulator = null;
+    let dspEngine = null;
+    let readLoopRunning = false;
+    let flushTimer = null;
+    let pollTimer = null;
+    let statsTimer = null;
+    let pending = {};
+    let rxText = "";
+    let txQueue = [];
+    let txBusy = false;
+    let txCount = 0;
+    let rxCount = 0;
+    let meta = null;
+    let state = {};
+    let lastStats = null;
+    let lastLocalEditMs = 0;
+    let connectInProgress = false;
+    const urlParams = new URLSearchParams(window.location.search);
+    const requestedMode = String(urlParams.get("mode") || "").toLowerCase();
+    let transportMode = (requestedMode === "emu" || requestedMode === "emulator") ? "emulator" : "serial";
+    let uiMode = "simple";
+    const heldNotes = new Map();
+    const heldTriggers = new Map();
+    const pointerToNote = new Map();
+    const keyboardCodeToNote = new Map();
+    const controlBindings = new Map();
+    let envVizCanvas = null;
+    let filterVizCanvas = null;
+    let visualizerRaf = 0;
+    const LIVE_FLUSH_DELAY_MS = 140;
+    const HEAVY_RELEASE_FLUSH_DELAY_MS = 90;
+    const PARAM_RANGE_OVERRIDES = {
+      0: [0, 88],   // osc1_wave: tonal wave bucket range only
+      1: [0, 88],   // osc2_wave: tonal wave bucket range only
+      47: [0, 88],  // osc3_wave: tonal wave bucket range only
+      48: [0, 88],  // osc4_wave: tonal wave bucket range only
+      6: [20, 110],  // osc2_coarse: narrowed musical tuning window
+      53: [20, 110], // osc1_freq: narrowed musical tuning window
+      54: [20, 110], // osc3_freq: narrowed musical tuning window
+      55: [20, 110], // osc4_freq: narrowed musical tuning window
+      34: [0, 126], // chorus_depth: mirrors PRA32 clamp
+      37: [0, 112], // delay_time: avoid saturated tail of lookup table
+      44: [0, 31]   // pb_range: effective range is scaled x4 in firmware
+    };
+    const PARAM_UI_SPEC = {
+      osc1_wave: {
+        label: "OSC1 Wave",
+        control: "click-knob",
+        guide: "Primary oscillator waveform (PRA32-style discrete wavetable buckets).",
+        options: [
+          { value: 0, label: "Saw" },
+          { value: 42, label: "Square" },
+          { value: 64, label: "Triangle" },
+          { value: 84, label: "Sine" }
+        ]
+      },
+      osc2_wave: {
+        label: "OSC2 Wave",
+        control: "click-knob",
+        guide: "Secondary oscillator waveform for layer/noise blend tone shaping.",
+        options: [
+          { value: 0, label: "Saw" },
+          { value: 42, label: "Square" },
+          { value: 64, label: "Triangle" },
+          { value: 84, label: "Sine" }
+        ]
+      },
+      osc3_wave: {
+        label: "OSC3 Wave",
+        control: "click-knob",
+        guide: "Third oscillator waveform.",
+        options: [
+          { value: 0, label: "Saw" },
+          { value: 42, label: "Square" },
+          { value: 64, label: "Triangle" },
+          { value: 84, label: "Sine" }
+        ]
+      },
+      osc4_wave: {
+        label: "OSC4 Wave",
+        control: "click-knob",
+        guide: "Fourth oscillator waveform.",
+        options: [
+          { value: 0, label: "Saw" },
+          { value: 42, label: "Square" },
+          { value: 64, label: "Triangle" },
+          { value: 84, label: "Sine" }
+        ]
+      },
+      osc_mix: {
+        label: "OSC Mix",
+        control: "knob",
+        guide: "Blend balance between oscillator 1 and oscillator 2."
+      },
+      osc1_shape: {
+        label: "OSC1 Shape",
+        control: "click-knob",
+        guide: "Wave family selector: triangle, square, saw, sine.",
+        options: [
+          { value: 0, label: "Triangle" },
+          { value: 42, label: "Square" },
+          { value: 84, label: "Saw" },
+          { value: 127, label: "Sine" }
+        ]
+      },
+      osc1_morph: {
+        label: "OSC1 Morph",
+        control: "knob",
+        guide: "Morph depth within the selected oscillator family."
+      },
+      sub_noise_mix: {
+        label: "Sub/Noise Mix",
+        control: "knob",
+        guide: "Below center adds noise, above center adds sub oscillator."
+      },
+      osc2_coarse: {
+        label: "OSC2 Coarse",
+        control: "click-knob",
+        guide: "Coarse tuning for oscillator 2 (centered semitone steps)."
+      },
+      osc1_freq: {
+        label: "OSC1 Frequency",
+        control: "click-knob",
+        guide: "Oscillator 1 coarse frequency (centered semitone steps)."
+      },
+      osc3_freq: {
+        label: "OSC3 Frequency",
+        control: "click-knob",
+        guide: "Oscillator 3 coarse frequency (centered semitone steps)."
+      },
+      osc4_freq: {
+        label: "OSC4 Frequency",
+        control: "click-knob",
+        guide: "Oscillator 4 coarse frequency (centered semitone steps)."
+      },
+      osc2_detune: {
+        label: "OSC2 Detune",
+        control: "knob",
+        guide: "Fine detune amount between oscillators."
+      },
+      osc_drift: {
+        label: "OSC Drift",
+        control: "knob",
+        guide: "Global fine tune offset around center (negative/positive)."
+      },
+      portamento: {
+        label: "Portamento",
+        control: "knob",
+        guide: "Glide time between notes."
+      },
+      filter_cutoff: {
+        label: "Filter Cutoff",
+        control: "knob",
+        guide: "Cutoff frequency for current filter mode."
+      },
+      filter_reso: {
+        label: "Resonance",
+        control: "knob",
+        guide: "Filter Q / emphasis around cutoff."
+      },
+      filter_mode: {
+        label: "Filter Mode",
+        control: "toggle",
+        guide: "Toggle between low-pass and high-pass response.",
+        options: [
+          { value: 0, label: "LP" },
+          { value: 127, label: "HP" }
+        ]
+      },
+      filter_eg_amt: {
+        label: "Filter EG Amt",
+        control: "knob",
+        guide: "Envelope modulation depth applied to cutoff."
+      },
+      filter_lfo_amt: {
+        label: "Filter LFO Amt",
+        control: "knob",
+        guide: "LFO modulation depth applied to cutoff."
+      },
+      filter_key_track: {
+        label: "Filter Key Track",
+        control: "knob",
+        guide: "Keyboard tracking amount for cutoff."
+      },
+      eg_attack: { label: "EG Attack", control: "knob", guide: "Filter envelope attack time." },
+      eg_decay: { label: "EG Decay", control: "knob", guide: "Filter envelope decay time." },
+      eg_sustain: { label: "EG Sustain", control: "knob", guide: "Filter envelope sustain level." },
+      eg_release: { label: "EG Release", control: "knob", guide: "Filter envelope release time." },
+      amp_attack: { label: "AMP Attack", control: "knob", guide: "Amplitude envelope attack time." },
+      amp_decay: { label: "AMP Decay", control: "knob", guide: "Amplitude envelope decay time." },
+      amp_sustain: { label: "AMP Sustain", control: "knob", guide: "Amplitude envelope sustain level." },
+      amp_release: { label: "AMP Release", control: "knob", guide: "Amplitude envelope release time." },
+      pitch_env_bend: {
+        label: "Pitch Bend",
+        control: "slider",
+        guide: "Pitch envelope amount (center = none, left = down, right = up)."
+      },
+      pitch_env_time: {
+        label: "Pitch Bend Time",
+        control: "knob",
+        guide: "Time for pitch envelope to glide back to center pitch."
+      },
+      lfo_wave: {
+        label: "LFO Wave",
+        control: "click-knob",
+        guide: "LFO waveform shape (triangle/sine/noise/saw/random/square).",
+        options: [
+          { value: 0, label: "Tri" },
+          { value: 26, label: "Sine" },
+          { value: 51, label: "Noise" },
+          { value: 76, label: "SawDn" },
+          { value: 102, label: "Random" },
+          { value: 127, label: "Square" }
+        ]
+      },
+      lfo_rate: { label: "LFO Rate", control: "knob", guide: "LFO speed." },
+      lfo_depth: { label: "LFO Depth", control: "knob", guide: "LFO modulation depth." },
+      lfo_fade: { label: "LFO Fade", control: "knob", guide: "Fade-in time for LFO amount." },
+      lfo_osc_amt: { label: "LFO OSC Amt", control: "knob", guide: "Pitch modulation amount from LFO." },
+      lfo_osc_dst: {
+        label: "LFO OSC Dest",
+        control: "click-knob",
+        guide: "Target modulation path (safe mode keeps pitch path only).",
+        options: [
+          { value: 0, label: "Pitch" },
+          { value: 127, label: "Shape" }
+        ]
+      },
+      eg_osc_amt: { label: "EG OSC Amt", control: "knob", guide: "Pitch modulation amount from envelope." },
+      eg_osc_dst: {
+        label: "EG OSC Dest",
+        control: "click-knob",
+        guide: "Envelope destination path (safe mode keeps pitch path only).",
+        options: [
+          { value: 0, label: "Pitch" },
+          { value: 127, label: "Shape" }
+        ]
+      },
+      chorus_mix: { label: "Chorus Mix", control: "knob", guide: "Wet level for chorus effect." },
+      chorus_rate: { label: "Chorus Rate", control: "knob", guide: "Chorus LFO speed." },
+      chorus_depth: { label: "Chorus Depth", control: "knob", guide: "Chorus modulation depth." },
+      chorus_delay: { label: "Chorus Delay", control: "knob", guide: "Base chorus delay time." },
+      delay_mix: { label: "Delay Mix", control: "knob", guide: "Wet level for delay effect." },
+      delay_time: { label: "Delay Time", control: "knob", guide: "Delay line time." },
+      delay_feedback: { label: "Delay Feedback", control: "knob", guide: "Regeneration/feedback amount." },
+      delay_mode: {
+        label: "Delay Mode",
+        control: "click-knob",
+        guide: "Delay topology selection.",
+        options: [
+          { value: 0, label: "Stereo" },
+          { value: 127, label: "PingPong" }
+        ]
+      },
+      reverb_mix: { label: "Reverb Mix", control: "knob", guide: "Wet level for reverb send." },
+      amp_gain: { label: "Amp Gain", control: "knob", guide: "Master synth gain." },
+      pan: { label: "Pan", control: "knob", guide: "Stereo panning position." },
+      voice_mode: {
+        label: "Voice Mode",
+        control: "click-knob",
+        guide: "Polyphonic or monophonic voice allocation.",
+        options: [
+          { value: 0, label: "Poly" },
+          { value: 127, label: "Mono" }
+        ]
+      },
+      pb_range: { label: "PB Range", control: "knob", guide: "Pitch-bend range control (effective range is x4)." },
+      infinite_drop: {
+        label: "Infinite Drop",
+        control: "switch",
+        guide: "Continuously pitches held notes downward while enabled."
+      },
+      osc_supersaw: {
+        label: "Supersaw",
+        control: "switch",
+        guide: "Force both osc banks to saw and enable 7-voice detuned supersaw mode."
+      },
+      osc1_level: { label: "OSC1 Level", control: "slider", guide: "Mixer level for oscillator 1." },
+      osc2_level: { label: "OSC2 Level", control: "slider", guide: "Mixer level for oscillator 2." },
+      osc3_level: { label: "OSC3 Level", control: "slider", guide: "Mixer level for oscillator 3." },
+      osc4_level: { label: "OSC4 Level", control: "slider", guide: "Mixer level for oscillator 4." },
+      bypass_fx: {
+        label: "FX Bypass",
+        control: "switch",
+        guide: "Enable or bypass the full effects chain."
+      }
+    };
+    const FILTER_VIRTUAL_CONTROLS = [
+      {
+        id: "lp_cutoff",
+        sourceParamName: "filter_cutoff",
+        label: "Lowpass Cutoff",
+        guide: "LP cutoff; moving this knob auto-selects Low-pass mode.",
+        forceFilterMode: 0
+      },
+      {
+        id: "hp_cutoff",
+        sourceParamName: "filter_cutoff",
+        label: "Highpass Cutoff",
+        guide: "HP cutoff; moving this knob auto-selects High-pass mode.",
+        forceFilterMode: 127
+      }
+    ];
+    const SIMPLE_VISIBLE_CONTROLS = {
+      osc: [
+        "osc1_shape",
+        "osc1_freq",
+        "osc1_level",
+        "osc2_wave",
+        "osc2_coarse",
+        "osc2_level",
+        "osc3_wave",
+        "osc3_freq",
+        "osc3_level",
+        "osc4_wave",
+        "osc4_freq",
+        "osc4_level"
+      ],
+      filter: ["lp_cutoff", "hp_cutoff", "filter_reso"],
+      env: ["amp_attack", "amp_decay", "amp_sustain", "amp_release", "pitch_env_bend", "pitch_env_time"],
+      lfo: ["lfo_wave", "lfo_rate", "lfo_depth", "lfo_osc_dst"],
+      fx: ["delay_mix", "reverb_mix"],
+      amp: ["amp_gain", "pan"],
+      system: ["voice_mode", "pb_range", "infinite_drop", "osc_supersaw", "bypass_fx"]
+    };
+    const SIMPLE_LABEL_OVERRIDES = {
+      osc1_shape: "Wave Type",
+      osc1_freq: "Frequency",
+      osc2_coarse: "Frequency",
+      osc3_freq: "Frequency",
+      osc4_freq: "Frequency",
+      osc2_wave: "Wave Type",
+      osc3_wave: "Wave Type",
+      osc4_wave: "Wave Type",
+      osc_mix: "Osc Mix",
+      sub_noise_mix: "Sub/Noise",
+      osc1_level: "Level",
+      osc2_level: "Level",
+      osc3_level: "Level",
+      osc4_level: "Level",
+      lp_cutoff: "Lowpass",
+      hp_cutoff: "Highpass",
+      filter_reso: "Resonance",
+      lfo_osc_dst: "Destination",
+      delay_mix: "Delay",
+      reverb_mix: "Reverb",
+      pitch_env_bend: "Pitch Bend",
+      pitch_env_time: "Bend Time",
+      infinite_drop: "Infinite Drop",
+      osc_supersaw: "Supersaw"
+    };
+    const PANEL_SECTION_ORDER = ["osc", "filter", "env", "lfo", "fx", "amp", "system"];
+    const PANEL_SECTION_META = {
+      osc: { title: "Oscillator", subtitle: "Wave source, tuning, blend" },
+      filter: { title: "Filter", subtitle: "Tone shaping path" },
+      env: { title: "Envelope", subtitle: "Time-domain amplitude contour" },
+      lfo: { title: "LFO", subtitle: "Cyclic modulation engine" },
+      fx: { title: "FX", subtitle: "Serial output effects chain" },
+      amp: { title: "Amp", subtitle: "Output gain and stereo image" },
+      system: { title: "System", subtitle: "Voice and global routing state" }
+    };
+    const PANEL_FOCUS_LINES = [
+      "osc1_shape",
+      "osc1_freq",
+      "osc2_wave",
+      "osc2_coarse",
+      "osc3_wave",
+      "osc3_freq",
+      "osc4_wave",
+      "osc4_freq",
+      "osc1_level",
+      "osc2_level",
+      "osc3_level",
+      "osc4_level",
+      "osc1_morph",
+      "osc2_detune",
+      "sub_noise_mix",
+      "osc_drift",
+      "portamento",
+      "pitch_env_bend",
+      "pitch_env_time",
+      "infinite_drop",
+      "osc_supersaw",
+      "filter_mode",
+      "filter_cutoff",
+      "filter_reso",
+      "lfo_rate",
+      "delay_mix",
+      "reverb_mix",
+      "amp_gain"
+    ];
+    const WHITE_SEMITONES = [0, 2, 4, 5, 7, 9, 11];
+    const FIXED_KEYBOARD_OCTAVES = 4;
+    const BLACK_KEYS = [
+      { semitone: 1, whiteIndex: 0, label: "C#" },
+      { semitone: 3, whiteIndex: 1, label: "D#" },
+      { semitone: 6, whiteIndex: 3, label: "F#" },
+      { semitone: 8, whiteIndex: 4, label: "G#" },
+      { semitone: 10, whiteIndex: 5, label: "A#" }
+    ];
+    const CHORD_INTERVALS = {
+      major: [0, 4, 7],
+      minor: [0, 3, 7],
+      dom7: [0, 4, 7, 10],
+      maj7: [0, 4, 7, 11],
+      min7: [0, 3, 7, 10],
+      sus2: [0, 2, 7],
+      sus4: [0, 5, 7],
+      dim: [0, 3, 6],
+      aug: [0, 4, 8],
+      power: [0, 7, 12]
+    };
+    const KEYBOARD_PC_MAP = {
+      KeyZ: 0, KeyS: 1, KeyX: 2, KeyD: 3, KeyC: 4, KeyV: 5,
+      KeyG: 6, KeyB: 7, KeyH: 8, KeyN: 9, KeyJ: 10, KeyM: 11,
+      Comma: 12, KeyL: 13, Period: 14, Semicolon: 15, Slash: 16,
+      KeyQ: 12, Digit2: 13, KeyW: 14, Digit3: 15, KeyE: 16, KeyR: 17,
+      Digit5: 18, KeyT: 19, Digit6: 20, KeyY: 21, Digit7: 22, KeyU: 23
+    };
+
+    const decoder = new TextDecoder();
+    const encoder = new TextEncoder();
+    const LOCAL_SCHEMA = normalizeSchema({
+      pages: ["osc", "filter", "env", "lfo", "fx", "amp", "system"],
+      params: [
+        { id: 0, name: "osc1_wave", page: "osc", default: 0 },
+        { id: 1, name: "osc2_wave", page: "osc", default: 0 },
+        { id: 2, name: "osc_mix", page: "osc", default: 64 },
+        { id: 3, name: "osc1_shape", page: "osc", default: 84 },
+        { id: 4, name: "osc1_morph", page: "osc", default: 0 },
+        { id: 5, name: "sub_noise_mix", page: "osc", default: 64 },
+        { id: 6, name: "osc2_coarse", page: "osc", default: 64 },
+        { id: 7, name: "osc2_detune", page: "osc", default: 64 },
+        { id: 8, name: "osc_drift", page: "osc", default: 64 },
+        { id: 9, name: "portamento", page: "osc", default: 0 },
+        { id: 10, name: "filter_cutoff", page: "filter", default: 96 },
+        { id: 11, name: "filter_reso", page: "filter", default: 24 },
+        { id: 12, name: "filter_mode", page: "filter", default: 0 },
+        { id: 13, name: "filter_eg_amt", page: "filter", default: 64 },
+        { id: 14, name: "filter_lfo_amt", page: "filter", default: 64 },
+        { id: 15, name: "filter_key_track", page: "filter", default: 64 },
+        { id: 16, name: "eg_attack", page: "env", default: 16 },
+        { id: 17, name: "eg_decay", page: "env", default: 48 },
+        { id: 18, name: "eg_sustain", page: "env", default: 96 },
+        { id: 19, name: "eg_release", page: "env", default: 48 },
+        { id: 20, name: "amp_attack", page: "env", default: 0 },
+        { id: 21, name: "amp_decay", page: "env", default: 48 },
+        { id: 22, name: "amp_sustain", page: "env", default: 127 },
+        { id: 23, name: "amp_release", page: "env", default: 48 },
+        { id: 24, name: "lfo_wave", page: "lfo", default: 0 },
+        { id: 25, name: "lfo_rate", page: "lfo", default: 40 },
+        { id: 26, name: "lfo_depth", page: "lfo", default: 0 },
+        { id: 27, name: "lfo_fade", page: "lfo", default: 0 },
+        { id: 28, name: "lfo_osc_amt", page: "lfo", default: 64 },
+        { id: 29, name: "lfo_osc_dst", page: "lfo", default: 0 },
+        { id: 30, name: "eg_osc_amt", page: "lfo", default: 64 },
+        { id: 31, name: "eg_osc_dst", page: "lfo", default: 0 },
+        { id: 32, name: "chorus_mix", page: "fx", default: 0 },
+        { id: 33, name: "chorus_rate", page: "fx", default: 64 },
+        { id: 34, name: "chorus_depth", page: "fx", default: 64 },
+        { id: 35, name: "chorus_delay", page: "fx", default: 64 },
+        { id: 36, name: "delay_mix", page: "fx", default: 0 },
+        { id: 37, name: "delay_time", page: "fx", default: 93 },
+        { id: 38, name: "delay_feedback", page: "fx", default: 64 },
+        { id: 39, name: "delay_mode", page: "fx", default: 0 },
+        { id: 40, name: "reverb_mix", page: "fx", default: 0 },
+        { id: 41, name: "amp_gain", page: "amp", default: 100 },
+        { id: 42, name: "pan", page: "amp", default: 64 },
+        { id: 43, name: "voice_mode", page: "system", default: 0 },
+        { id: 44, name: "pb_range", page: "system", default: 2 },
+        { id: 45, name: "bypass_fx", page: "system", default: 0 },
+        { id: 46, name: "osc_supersaw", page: "system", default: 0 },
+        { id: 47, name: "osc3_wave", page: "osc", default: 64 },
+        { id: 48, name: "osc4_wave", page: "osc", default: 84 },
+        { id: 49, name: "osc1_level", page: "osc", default: 127 },
+        { id: 50, name: "osc2_level", page: "osc", default: 127 },
+        { id: 51, name: "osc3_level", page: "osc", default: 0 },
+        { id: 52, name: "osc4_level", page: "osc", default: 0 },
+        { id: 53, name: "osc1_freq", page: "osc", default: 64 },
+        { id: 54, name: "osc3_freq", page: "osc", default: 64 },
+        { id: 55, name: "osc4_freq", page: "osc", default: 64 },
+        { id: 56, name: "pitch_env_bend", page: "env", default: 64 },
+        { id: 57, name: "pitch_env_time", page: "env", default: 0 },
+        { id: 58, name: "infinite_drop", page: "system", default: 0 }
+      ]
+    });
+    const paramById = new Map();
+    const paramByName = new Map();
+
+    function normalizeSchema(schema) {
+      const params = (schema && Array.isArray(schema.params)) ? schema.params : [];
+      const normalized = params.map((p) => {
+        const id = Number(p.id);
+        const override = PARAM_RANGE_OVERRIDES[id];
+        const forcedPage = (id === 46) ? "system" : p.page;
+        const min = override ? override[0] : (Number.isFinite(p.min) ? Number(p.min) : 0);
+        const max = override ? override[1] : (Number.isFinite(p.max) ? Number(p.max) : 127);
+        const boundedMin = Math.max(0, Math.min(127, Math.round(min)));
+        const boundedMax = Math.max(boundedMin, Math.min(127, Math.round(max)));
+        const defRaw = Number.isFinite(p.default) ? Number(p.default) : boundedMin;
+        const def = Math.max(boundedMin, Math.min(boundedMax, Math.round(defRaw)));
+        return { ...p, page: forcedPage, min: boundedMin, max: boundedMax, default: def };
+      });
+      return {
+        pages: (schema && Array.isArray(schema.pages)) ? schema.pages : [],
+        params: normalized
+      };
+    }
+
+    function rebuildParamIndex() {
+      paramById.clear();
+      paramByName.clear();
+      if (!meta || !Array.isArray(meta.params)) {
+        return;
+      }
+      for (const p of meta.params) {
+        paramById.set(Number(p.id), p);
+        if (p.name) {
+          paramByName.set(String(p.name), p);
+        }
+      }
+    }
+
+    function uiSpecForParam(param) {
+      if (!param || !param.name) {
+        return { control: "knob", label: (param && param.name) ? param.name : "param", guide: "" };
+      }
+      const spec = PARAM_UI_SPEC[param.name];
+      return spec ? { ...spec } : { control: "knob", label: param.name, guide: "" };
+    }
+
+    function nearestOptionValue(options, rawValue) {
+      if (!Array.isArray(options) || options.length === 0) {
+        return clampMidi7(rawValue);
+      }
+      let best = options[0].value;
+      let bestDist = Math.abs(Number(rawValue) - Number(best));
+      for (const option of options) {
+        const candidate = Number(option.value);
+        const dist = Math.abs(Number(rawValue) - candidate);
+        if (dist < bestDist) {
+          best = candidate;
+          bestDist = dist;
+        }
+      }
+      return clampMidi7(best);
+    }
+
+    function optionLabelForValue(options, value) {
+      if (!Array.isArray(options) || options.length === 0) {
+        return null;
+      }
+      const snapped = nearestOptionValue(options, value);
+      for (const option of options) {
+        if (Number(option.value) === snapped) {
+          return option.label;
+        }
+      }
+      return null;
+    }
+
+    function clampParamValue(param, rawValue) {
+      const min = Number.isFinite(param && param.min) ? Number(param.min) : 0;
+      const max = Number.isFinite(param && param.max) ? Number(param.max) : 127;
+      let value = Number.isFinite(rawValue) ? Math.round(rawValue) : min;
+      if (value < min) {
+        value = min;
+      } else if (value > max) {
+        value = max;
+      }
+      if (param && param.name === "osc1_shape") {
+        if (value < 32) {
+          value = 0;
+        } else if (value < 64) {
+          value = 42;
+        } else if (value < 96) {
+          value = 84;
+        } else {
+          value = 127;
+        }
+      }
+      const spec = uiSpecForParam(param);
+      if (spec.control === "click-knob" && Array.isArray(spec.options) && spec.options.length > 0) {
+        value = nearestOptionValue(spec.options, value);
+      }
+      if (spec.control === "toggle" && Array.isArray(spec.options) && spec.options.length > 0) {
+        value = nearestOptionValue(spec.options, value);
+      }
+      if (param && /^(voice_mode|bypass_fx|osc_supersaw|infinite_drop)$/.test(param.name || "")) {
+        value = (value >= 64) ? 127 : 0;
+      }
+      return value;
+    }
+
+    function clampByParamId(id, rawValue) {
+      return clampParamValue(paramById.get(Number(id)), rawValue);
+    }
+
+    function formatParamValue(param, rawValue) {
+      const v = clampParamValue(param, rawValue);
+      const spec = uiSpecForParam(param);
+      const optionLabel = optionLabelForValue(spec.options, v);
+      if (optionLabel) {
+        return optionLabel;
+      }
+      if (param && param.name === "osc_drift") {
+        const centered = v - 64;
+        return centered > 0 ? `+${String(centered)}` : String(centered);
+      }
+      if (param && param.name === "pitch_env_bend") {
+        const centered = v - 64;
+        return centered > 0 ? `+${String(centered)}` : String(centered);
+      }
+      return String(v);
+    }
+
+    function nowMs() {
+      return performance.now();
+    }
+
+    function setStatus(text, ok) {
+      statusPill.textContent = text;
+      statusPill.className = "status-pill " + (ok ? "ok" : "bad");
+    }
+
+    function setConnectedUi(connected) {
+      connectBtn.disabled = connected || connectInProgress;
+      disconnectBtn.disabled = !connected;
+      transportBtn.disabled = connected || connectInProgress;
+      metaBtn.disabled = !connected;
+      stateBtn.disabled = !connected;
+      statsBtn.disabled = !connected;
+      kbPanicBtn.disabled = !connected;
+    }
+
+    function refreshTransportUi() {
+      const isEmu = transportMode === "emulator";
+      transportBtn.textContent = isEmu ? "Mode: Emulator" : "Mode: USB";
+      connectBtn.textContent = isEmu ? "Start Emulator" : "Connect USB";
+      connectBtn.title = isEmu
+        ? "Start local firmware emulator (no hardware required)"
+        : "Connect to Pico via Web Serial";
+      if (!port && !(emulator && emulator.connected)) {
+        portInfo.textContent = isEmu ? "Port: EMULATOR" : "Port: --";
+      }
+    }
+
+    async function setTransportMode(nextMode) {
+      const desired = (nextMode === "emulator") ? "emulator" : "serial";
+      if (desired === transportMode || connectInProgress) {
+        return;
+      }
+      const connected = Boolean(port || (emulator && emulator.connected));
+      if (connected) {
+        await disconnect();
+      }
+      transportMode = desired;
+      refreshTransportUi();
+      setStatus(desired === "emulator" ? "Emulator Ready" : "Disconnected", false);
+      pushLog(`MODE ${desired.toUpperCase()}`, true);
+    }
+
+    function pushLog(text, force = false) {
+      if (!force && !VERBOSE_IO_LOG) {
+        return;
+      }
+      const row = document.createElement("div");
+      row.textContent = text.length > 220 ? text.slice(0, 220) + "..." : text;
+      logEl.appendChild(row);
+      if (logEl.children.length > 140) {
+        logEl.removeChild(logEl.firstChild);
+      }
+      logEl.scrollTop = logEl.scrollHeight;
+    }
+
+    function updateIoInfo() {
+      ioInfo.textContent = `TX ${txCount} | RX ${rxCount}`;
+    }
+
+    function setPortInfo() {
+      if (transportMode === "emulator") {
+        portInfo.textContent = "Port: EMULATOR";
+        return;
+      }
+      if (!port || !port.getInfo) {
+        portInfo.textContent = "Port: --";
+        return;
+      }
+      const info = port.getInfo();
+      const vid = (info.usbVendorId || 0).toString(16).padStart(4, "0");
+      const pid = (info.usbProductId || 0).toString(16).padStart(4, "0");
+      portInfo.textContent = `Port: VID ${vid} PID ${pid}`;
+    }
+
+    function queueLine(line) {
+      if (transportMode === "emulator") {
+        if (!emulator || !emulator.connected) {
+          return;
+        }
+        txCount += 1;
+        updateIoInfo();
+        pushLog("TX " + line);
+        void emulateCommand(line);
+        return;
+      }
+      if (!writer) {
+        return;
+      }
+      txQueue.push(line);
+      void drainTx();
+    }
+
+    async function drainTx() {
+      if (txBusy || !writer) {
+        return;
+      }
+      txBusy = true;
+      try {
+        while (txQueue.length > 0 && writer) {
+          const line = txQueue.shift();
+          await writer.write(encoder.encode(line + "\n"));
+          txCount += 1;
+          updateIoInfo();
+          pushLog("TX " + line);
+        }
+      } catch (err) {
+        pushLog("TX ERROR " + err.message, true);
+        await disconnect();
+      } finally {
+        txBusy = false;
+      }
+    }
+
+    function clampMidi7(raw) {
+      const v = Number.isFinite(raw) ? Math.round(raw) : 0;
+      return Math.max(0, Math.min(127, v));
+    }
+
+    function keyboardStartNote() {
+      const octave = Number(kbStartOctEl.value);
+      return clampMidi7((octave + 1) * 12);
+    }
+
+    function keyboardOctaveCount() {
+      return FIXED_KEYBOARD_OCTAVES;
+    }
+
+    function keyboardVelocity() {
+      return Math.max(1, clampMidi7(Number(kbVelocityEl.value)));
+    }
+
+    function noteLabel(note) {
+      const names = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
+      const n = clampMidi7(note);
+      const pitch = names[n % 12];
+      const octave = Math.floor(n / 12) - 1;
+      return `${pitch}${octave}`;
+    }
+
+    function setNoteVisual(note, active) {
+      const keyEls = keyboardEl.querySelectorAll(`[data-note="${String(note)}"]`);
+      for (const el of keyEls) {
+        el.classList.toggle("active", active);
+      }
+    }
+
+    function sendNoteOn(note, velocity) {
+      queueLine(`NOTEON ${clampMidi7(note)} ${clampMidi7(velocity)}`);
+    }
+
+    function sendNoteOff(note, velocity = 0) {
+      queueLine(`NOTEOFF ${clampMidi7(note)} ${clampMidi7(velocity)}`);
+    }
+
+    function chordModeEnabled() {
+      return Boolean(kbChordModeEl && kbChordModeEl.checked);
+    }
+
+    function chordRootMidi() {
+      const semitone = clampMidi7(Number(kbChordRootEl ? kbChordRootEl.value : 0));
+      const octave = Math.max(0, Math.min(8, Number(kbChordOctEl ? kbChordOctEl.value : 3)));
+      return clampMidi7(((octave + 1) * 12) + semitone);
+    }
+
+    function chordAnchorMidiForTrigger(note) {
+      const trigger = clampMidi7(note);
+      const root = chordRootMidi();
+      const keyboardBase = keyboardStartNote();
+      const transposed = root + (trigger - keyboardBase);
+      return clampMidi7(transposed);
+    }
+
+    function chordNotesForTrigger(note) {
+      const trigger = clampMidi7(note);
+      if (!chordModeEnabled()) {
+        return [trigger];
+      }
+      const root = chordAnchorMidiForTrigger(trigger);
+      const chordType = (kbChordTypeEl && CHORD_INTERVALS[kbChordTypeEl.value]) ? kbChordTypeEl.value : "major";
+      const intervals = CHORD_INTERVALS[chordType];
+      const out = [];
+      for (const interval of intervals) {
+        out.push(clampMidi7(root + interval));
+      }
+      return Array.from(new Set(out));
+    }
+
+    function noteAcquireSingle(note, velocity) {
+      const midiNote = clampMidi7(note);
+      const count = heldNotes.get(midiNote) || 0;
+      if (count === 0) {
+        sendNoteOn(midiNote, velocity);
+        setNoteVisual(midiNote, true);
+      }
+      heldNotes.set(midiNote, count + 1);
+    }
+
+    function noteReleaseSingle(note) {
+      const midiNote = clampMidi7(note);
+      const count = heldNotes.get(midiNote) || 0;
+      if (count <= 1) {
+        heldNotes.delete(midiNote);
+        sendNoteOff(midiNote, 0);
+        setNoteVisual(midiNote, false);
+      } else {
+        heldNotes.set(midiNote, count - 1);
+      }
+    }
+
+    function noteAcquire(note, velocity) {
+      const trigger = clampMidi7(note);
+      const entry = heldTriggers.get(trigger);
+      if (entry) {
+        entry.count += 1;
+        return;
+      }
+      const notes = chordNotesForTrigger(trigger);
+      heldTriggers.set(trigger, { count: 1, notes });
+      for (const chordNote of notes) {
+        noteAcquireSingle(chordNote, velocity);
+      }
+    }
+
+    function noteRelease(note) {
+      const trigger = clampMidi7(note);
+      const entry = heldTriggers.get(trigger);
+      if (!entry) {
+        noteReleaseSingle(trigger);
+        return;
+      }
+      if (entry.count > 1) {
+        entry.count -= 1;
+        return;
+      }
+      heldTriggers.delete(trigger);
+      for (const chordNote of entry.notes) {
+        noteReleaseSingle(chordNote);
+      }
+    }
+
+    function releaseAllHeldNotes() {
+      const notes = Array.from(heldNotes.keys());
+      for (const note of notes) {
+        sendNoteOff(note, 0);
+        setNoteVisual(note, false);
+      }
+      heldNotes.clear();
+      heldTriggers.clear();
+      pointerToNote.clear();
+      keyboardCodeToNote.clear();
+    }
+
+    function createPianoKey({ note, isBlack, leftPx, label }) {
+      const key = document.createElement("button");
+      key.type = "button";
+      key.className = `piano-key ${isBlack ? "black" : "white"}`;
+      key.style.left = `${String(leftPx)}px`;
+      key.dataset.note = String(note);
+      key.title = `${noteLabel(note)} (${note})`;
+      key.textContent = label;
+
+      const pointerDown = (ev) => {
+        ev.preventDefault();
+        const noteVal = Number(key.dataset.note);
+        pointerToNote.set(ev.pointerId, noteVal);
+        key.setPointerCapture(ev.pointerId);
+        noteAcquire(noteVal, keyboardVelocity());
+      };
+      const pointerUp = (ev) => {
+        const noteVal = pointerToNote.get(ev.pointerId);
+        if (noteVal === undefined) {
+          return;
+        }
+        pointerToNote.delete(ev.pointerId);
+        noteRelease(noteVal);
+      };
+
+      key.addEventListener("pointerdown", pointerDown);
+      key.addEventListener("pointerup", pointerUp);
+      key.addEventListener("pointercancel", pointerUp);
+      key.addEventListener("lostpointercapture", pointerUp);
+      return key;
+    }
+
+    function renderKeyboard() {
+      keyboardEl.innerHTML = "";
+      const start = keyboardStartNote();
+      const octaves = keyboardOctaveCount();
+
+      for (let oct = 0; oct < octaves; ++oct) {
+        const octaveRoot = start + (oct * 12);
+        const octaveEl = document.createElement("div");
+        octaveEl.className = "keyboard-octave";
+
+        for (let i = 0; i < WHITE_SEMITONES.length; ++i) {
+          const semitone = WHITE_SEMITONES[i];
+          const note = clampMidi7(octaveRoot + semitone);
+          const white = createPianoKey({
+            note,
+            isBlack: false,
+            leftPx: i * 28,
+            label: noteLabel(note)
+          });
+          octaveEl.appendChild(white);
+        }
+
+        for (const blackDef of BLACK_KEYS) {
+          const note = clampMidi7(octaveRoot + blackDef.semitone);
+          const black = createPianoKey({
+            note,
+            isBlack: true,
+            leftPx: (blackDef.whiteIndex * 28) + 19,
+            label: blackDef.label
+          });
+          octaveEl.appendChild(black);
+        }
+
+        keyboardEl.appendChild(octaveEl);
+      }
+
+      kbVelocityEl.title = String(keyboardVelocity());
+      const chordText = chordModeEnabled()
+        ? `Chord ${String(kbChordTypeEl.value).toUpperCase()} mapped from keys (base ${noteLabel(chordRootMidi())})`
+        : "Single note mode";
+      keyboardHintEl.textContent =
+        `Start ${noteLabel(start)}  4 Oct  Vel ${keyboardVelocity()}  ${chordText}  (z-m / q-u rows)`;
+
+      for (const note of heldNotes.keys()) {
+        setNoteVisual(note, true);
+      }
+    }
+
+    function scheduleFlush(delayMs = LIVE_FLUSH_DELAY_MS) {
+      if (flushTimer) {
+        clearTimeout(flushTimer);
+      }
+      flushTimer = setTimeout(() => {
+        flushTimer = null;
+        const updates = Object.entries(pending);
+        pending = {};
+        if (updates.length === 0) {
+          return;
+        }
+        if (updates.length === 1) {
+          const [id, value] = updates[0];
+          queueLine(`SETQ ${id} ${value}`);
+        } else {
+          const payload = updates.map(([id, value]) => `${id}=${value}`).join(",");
+          queueLine(`BATCHQ ${payload}`);
+        }
+      }, Math.max(20, delayMs));
+    }
+
+    function seedLocalDefaults() {
+      const seeded = {};
+      for (const p of LOCAL_SCHEMA.params) {
+        seeded[p.id] = clampParamValue(p, p.default);
+      }
+      return seeded;
+    }
+
+    function mapLinear(value, inMin, inMax, outMin, outMax) {
+      const x = (value - inMin) / Math.max(1e-9, inMax - inMin);
+      const t = Math.max(0, Math.min(1, x));
+      return outMin + ((outMax - outMin) * t);
+    }
+
+    function mapExp01(t, minVal, maxVal) {
+      const clamped = Math.max(0, Math.min(1, t));
+      return minVal * Math.pow(maxVal / minVal, clamped);
+    }
+
+    function midiToHz(note) {
+      return 440 * Math.pow(2, (note - 69) / 12);
+    }
+
+    class BrowserDspEngine {
+      constructor(initialState, paramByIdMap, paramByNameMap) {
+        this.state = { ...initialState };
+        this.paramById = paramByIdMap;
+        this.paramByName = paramByNameMap;
+        this.ctx = null;
+        this.inputBus = null;
+        this.hpFilter = null;
+        this.lpFilter = null;
+        this.preFx = null;
+        this.dryGain = null;
+        this.wetGain = null;
+        this.chorusSend = null;
+        this.delaySend = null;
+        this.reverbSend = null;
+        this.chorusDelay = null;
+        this.chorusWet = null;
+        this.delayNode = null;
+        this.delayFeedback = null;
+        this.delayWet = null;
+        this.reverbConvolver = null;
+        this.reverbWet = null;
+        this.master = null;
+        this.panner = null;
+        this.lfoOsc = null;
+        this.lfoOut = null;
+        this.voices = [];
+        this.voiceSerial = 1;
+        this.maxVoices = 4;
+        this.noiseBuffer = null;
+      }
+
+      valueByName(name, fallback = 0) {
+        const p = this.paramByName.get(name);
+        if (!p) {
+          return fallback;
+        }
+        const raw = (this.state[p.id] !== undefined) ? this.state[p.id] : p.default;
+        return clampParamValue(p, raw);
+      }
+
+      async start() {
+        const Ctx = window.AudioContext || window.webkitAudioContext;
+        if (!Ctx) {
+          throw new Error("Web Audio API unavailable");
+        }
+        this.ctx = new Ctx({ latencyHint: "interactive" });
+        await this.ctx.resume();
+
+        const ctx = this.ctx;
+        this.inputBus = ctx.createGain();
+        this.hpFilter = ctx.createBiquadFilter();
+        this.hpFilter.type = "highpass";
+        this.lpFilter = ctx.createBiquadFilter();
+        this.lpFilter.type = "lowpass";
+        this.preFx = ctx.createGain();
+        this.dryGain = ctx.createGain();
+        this.wetGain = ctx.createGain();
+        this.chorusSend = ctx.createGain();
+        this.delaySend = ctx.createGain();
+        this.reverbSend = ctx.createGain();
+        this.chorusDelay = ctx.createDelay(0.05);
+        this.chorusWet = ctx.createGain();
+        this.delayNode = ctx.createDelay(1.5);
+        this.delayFeedback = ctx.createGain();
+        this.delayWet = ctx.createGain();
+        this.reverbConvolver = ctx.createConvolver();
+        this.reverbWet = ctx.createGain();
+        this.master = ctx.createGain();
+        this.panner = ctx.createStereoPanner();
+
+        this.inputBus.connect(this.hpFilter);
+        this.hpFilter.connect(this.lpFilter);
+        this.lpFilter.connect(this.preFx);
+
+        this.preFx.connect(this.dryGain);
+        this.preFx.connect(this.wetGain);
+        this.wetGain.connect(this.chorusSend);
+        this.wetGain.connect(this.delaySend);
+        this.wetGain.connect(this.reverbSend);
+
+        this.chorusSend.connect(this.chorusDelay);
+        this.chorusDelay.connect(this.chorusWet);
+
+        this.delaySend.connect(this.delayNode);
+        this.delayNode.connect(this.delayFeedback);
+        this.delayFeedback.connect(this.delayNode);
+        this.delayNode.connect(this.delayWet);
+
+        this.reverbSend.connect(this.reverbConvolver);
+        this.reverbConvolver.connect(this.reverbWet);
+
+        this.dryGain.connect(this.master);
+        this.chorusWet.connect(this.master);
+        this.delayWet.connect(this.master);
+        this.reverbWet.connect(this.master);
+
+        this.master.connect(this.panner);
+        this.panner.connect(ctx.destination);
+
+        this.lfoOsc = ctx.createOscillator();
+        this.lfoOut = ctx.createGain();
+        this.lfoOsc.connect(this.lfoOut);
+        this.lfoOsc.start();
+
+        this.noiseBuffer = this._createNoiseBuffer();
+        this.reverbConvolver.buffer = this._createReverbImpulse();
+        this.applyAllParams(this.state);
+      }
+
+      async stop() {
+        this._releaseAllVoices(0.02);
+        if (this.ctx) {
+          try {
+            await this.ctx.close();
+          } catch {}
+        }
+        this.ctx = null;
+      }
+
+      applyAllParams(nextState) {
+        this.state = { ...this.state, ...nextState };
+        this._updateGlobalNodes();
+        this._updateVoiceNodes();
+      }
+
+      applyParam(id, value) {
+        this.state[id] = value;
+        this._updateGlobalNodes();
+        this._updateVoiceNodes();
+      }
+
+      noteOn(note, velocity) {
+        if (!this.ctx) {
+          return;
+        }
+        const mono = this.valueByName("voice_mode", 0) >= 64;
+        if (mono) {
+          this._releaseAllVoices(0.01);
+        }
+        const voice = this._allocateVoice();
+        this._startVoice(voice, note, velocity);
+      }
+
+      noteOff(note) {
+        if (!this.ctx) {
+          return;
+        }
+        const now = this.ctx.currentTime;
+        for (const voice of this.voices) {
+          if (voice.note === note && !voice.released) {
+            this._releaseVoice(voice, now);
+          }
+        }
+      }
+
+      _allocateVoice() {
+        if (this.voices.length < this.maxVoices) {
+          const v = { id: this.voiceSerial++, note: -1, released: true, startedAt: 0 };
+          this.voices.push(v);
+          return v;
+        }
+        let oldest = this.voices[0];
+        for (const voice of this.voices) {
+          if (voice.startedAt < oldest.startedAt) {
+            oldest = voice;
+          }
+        }
+        this._hardStopVoice(oldest);
+        return oldest;
+      }
+
+      _waveTypeFromParam(name, fallback = "sawtooth") {
+        const v = this.valueByName(name, 0);
+        const tonalWave = (name === "osc2_wave" || name === "osc3_wave" || name === "osc4_wave" || name === "osc1_wave");
+        if (tonalWave) {
+          if (v < 21) {
+            return "sawtooth";
+          }
+          if (v < 53) {
+            return "square";
+          }
+          if (v < 74) {
+            return "triangle";
+          }
+          return "sine";
+        }
+        if (v < 32) {
+          return "triangle";
+        }
+        if (v < 64) {
+          return "square";
+        }
+        if (v < 96) {
+          return "sawtooth";
+        }
+        return "sine";
+      }
+
+      _createNoiseBuffer() {
+        const ctx = this.ctx;
+        const duration = 1.0;
+        const len = Math.max(1, Math.floor(ctx.sampleRate * duration));
+        const buf = ctx.createBuffer(1, len, ctx.sampleRate);
+        const data = buf.getChannelData(0);
+        for (let i = 0; i < len; ++i) {
+          data[i] = (Math.random() * 2) - 1;
+        }
+        return buf;
+      }
+
+      _createReverbImpulse() {
+        const ctx = this.ctx;
+        const seconds = 1.6;
+        const len = Math.max(1, Math.floor(ctx.sampleRate * seconds));
+        const impulse = ctx.createBuffer(2, len, ctx.sampleRate);
+        for (let ch = 0; ch < 2; ++ch) {
+          const data = impulse.getChannelData(ch);
+          for (let i = 0; i < len; ++i) {
+            const t = i / len;
+            const decay = Math.pow(1 - t, 2.6);
+            data[i] = ((Math.random() * 2) - 1) * decay * 0.45;
+          }
+        }
+        return impulse;
+      }
+
+      _startVoice(voice, note, velocity) {
+        const ctx = this.ctx;
+        const now = ctx.currentTime;
+        const portamento = mapLinear(this.valueByName("portamento", 0), 0, 127, 0.0, 0.35);
+        const driftCents = (this.valueByName("osc_drift", 64) - 64) * 0.8;
+        const osc1Semi = this.valueByName("osc1_freq", 64) - 64;
+        const osc2Semi = this.valueByName("osc2_coarse", 64) - 64;
+        const osc3Semi = this.valueByName("osc3_freq", 64) - 64;
+        const osc4Semi = this.valueByName("osc4_freq", 64) - 64;
+        const detuneCents = (this.valueByName("osc2_detune", 64) - 64) * 1.6;
+        const supersaw = this.valueByName("osc_supersaw", 0) >= 64;
+        const infiniteDropEnabled = this.valueByName("infinite_drop", 0) >= 64;
+        const pbRange = Math.max(0, Math.min(31, this.valueByName("pb_range", 2))) * 4;
+        const pitchEnvRaw = this.valueByName("pitch_env_bend", 64) - 64;
+        let pitchEnvBend14 = 0;
+        if (pitchEnvRaw > 0) {
+          pitchEnvBend14 = Math.round((pitchEnvRaw / 63) * 8191);
+        } else if (pitchEnvRaw < 0) {
+          pitchEnvBend14 = -Math.round(((-pitchEnvRaw) / 64) * 8192);
+        }
+        const pitchEnvCents = (pitchEnvBend14 / 8192) * pbRange * 100;
+        const pitchEnvTimeNorm = this.valueByName("pitch_env_time", 0) / 127;
+        const pitchEnvSeconds = (Math.abs(pitchEnvCents) > 0.01 && pitchEnvTimeNorm > 0.001)
+          ? mapExp01(pitchEnvTimeNorm, 0.01, 2.5)
+          : 0;
+
+        voice.note = note;
+        voice.startedAt = now;
+        voice.released = false;
+        voice.baseHz = midiToHz(note);
+        voice.node = ctx.createGain();
+        voice.node.gain.value = 0;
+        voice.node.connect(this.inputBus);
+        voice.parts = [];
+        voice.lfoDepthNodes = [];
+
+        const oscMix = this.valueByName("osc_mix", 64) / 127;
+        const osc1Slider = this.valueByName("osc1_level", 127) / 127;
+        const osc2Slider = this.valueByName("osc2_level", 127) / 127;
+        const osc3Slider = this.valueByName("osc3_level", 0) / 127;
+        const osc4Slider = this.valueByName("osc4_level", 0) / 127;
+        const osc1Level = osc1Slider * (1.0 - oscMix);
+        const osc2Level = osc2Slider * oscMix;
+        const osc3Level = osc3Slider * 0.9;
+        const osc4Level = osc4Slider * 0.9;
+        const subNoiseRaw = this.valueByName("sub_noise_mix", 64);
+        const subNoiseDelta = subNoiseRaw - 64;
+        let subLevel = 0;
+        let noiseLevel = 0;
+        if (subNoiseDelta >= 0) {
+          const t = Math.min(1, Math.max(0, subNoiseDelta / 63));
+          subLevel = Math.pow(t, 0.65) * 0.34;
+        } else {
+          const t = Math.min(1, Math.max(0, (-subNoiseDelta) / 64));
+          noiseLevel = Math.pow(t, 1.35) * 0.22;
+        }
+
+        const createOsc = (type, hz, cents, gainValue) => {
+          const osc = ctx.createOscillator();
+          osc.type = type;
+          const gain = ctx.createGain();
+          gain.gain.value = gainValue;
+          const lfoDepth = ctx.createGain();
+          lfoDepth.gain.value = 0;
+          this.lfoOut.connect(lfoDepth);
+          lfoDepth.connect(osc.detune);
+          osc.connect(gain);
+          gain.connect(voice.node);
+          const target = Math.max(20, hz);
+          osc.frequency.setValueAtTime(target, now);
+          if (portamento > 0) {
+            osc.frequency.setTargetAtTime(target, now, Math.max(0.002, portamento * 0.25));
+          }
+          osc.detune.setValueAtTime(cents + pitchEnvCents, now);
+          if (pitchEnvSeconds > 0) {
+            osc.detune.linearRampToValueAtTime(cents, now + pitchEnvSeconds);
+          }
+          if (infiniteDropEnabled) {
+            const dropStart = now + (pitchEnvSeconds > 0 ? pitchEnvSeconds : 0);
+            osc.detune.setTargetAtTime(cents - 9600, dropStart, 4.0);
+          }
+          osc.start(now);
+          voice.parts.push({ osc, gain, lfoDepth, isNoise: false });
+          voice.lfoDepthNodes.push(lfoDepth);
+        };
+
+        const osc1Type = supersaw ? "sawtooth" : this._waveTypeFromParam("osc1_shape", "sawtooth");
+        const osc2Type = supersaw ? "sawtooth" : this._waveTypeFromParam("osc2_wave", "triangle");
+        const osc3Type = this._waveTypeFromParam("osc3_wave", "triangle");
+        const osc4Type = this._waveTypeFromParam("osc4_wave", "sine");
+        const osc1Hz = voice.baseHz * Math.pow(2, osc1Semi / 12);
+        const osc2Hz = voice.baseHz * Math.pow(2, osc2Semi / 12);
+        const osc3Hz = voice.baseHz * Math.pow(2, osc3Semi / 12);
+        const osc4Hz = voice.baseHz * Math.pow(2, osc4Semi / 12);
+
+        if (supersaw) {
+          const spread = 6 + Math.max(0, detuneCents * 0.35);
+          const detuneTable = [-3, -2, -1, 0, 1, 2, 3];
+          for (let i = 0; i < detuneTable.length; ++i) {
+            const cents = driftCents + (detuneTable[i] * spread);
+            createOsc("sawtooth", osc1Hz, cents, (osc1Level * 0.16));
+            createOsc("sawtooth", osc2Hz, cents + detuneCents, (osc2Level * 0.16));
+          }
+        } else {
+          createOsc(osc1Type, osc1Hz, driftCents, osc1Level);
+          createOsc(osc2Type, osc2Hz, driftCents + detuneCents, osc2Level);
+          if (osc3Level > 0.001) {
+            createOsc(osc3Type, osc3Hz, driftCents - (detuneCents * 0.7), osc3Level);
+          }
+          if (osc4Level > 0.001) {
+            createOsc(osc4Type, osc4Hz, driftCents + (detuneCents * 0.7), osc4Level);
+          }
+        }
+
+        if (subLevel > 0.0005) {
+          createOsc("sine", Math.max(20, osc1Hz * 0.5), driftCents * 0.35, subLevel);
+        }
+
+        if (noiseLevel > 0.0005) {
+          const noiseSrc = ctx.createBufferSource();
+          noiseSrc.buffer = this.noiseBuffer;
+          noiseSrc.loop = true;
+          const noiseGain = ctx.createGain();
+          noiseGain.gain.value = noiseLevel;
+          noiseSrc.connect(noiseGain);
+          noiseGain.connect(voice.node);
+          noiseSrc.start(now);
+          voice.parts.push({ osc: noiseSrc, gain: noiseGain, isNoise: true });
+        }
+
+        const velNorm = Math.max(0.05, Math.min(1.0, velocity / 127));
+        const attack = mapExp01(this.valueByName("amp_attack", 0) / 127, 0.002, 1.8);
+        const decay = mapExp01(this.valueByName("amp_decay", 48) / 127, 0.02, 2.4);
+        const sustain = mapLinear(this.valueByName("amp_sustain", 127), 0, 127, 0, 1.0);
+        const peak = velNorm * 0.5;
+        voice.node.gain.cancelScheduledValues(now);
+        voice.node.gain.setValueAtTime(0.0001, now);
+        voice.node.gain.linearRampToValueAtTime(peak, now + attack);
+        voice.node.gain.linearRampToValueAtTime(Math.max(0.0001, peak * sustain), now + attack + decay);
+
+        this._updateVoiceLfoDepth(voice);
+      }
+
+      _releaseAllVoices(minReleaseS = 0.03) {
+        if (!this.ctx) {
+          this.voices = [];
+          return;
+        }
+        const now = this.ctx.currentTime;
+        for (const voice of this.voices) {
+          if (voice.node && !voice.released) {
+            const release = Math.max(minReleaseS, mapExp01(this.valueByName("amp_release", 48) / 127, 0.03, 3.2));
+            voice.node.gain.cancelScheduledValues(now);
+            voice.node.gain.setTargetAtTime(0.0001, now, Math.max(0.005, release * 0.3));
+            voice.released = true;
+            const stopAt = now + release + 0.08;
+            this._stopVoiceParts(voice, stopAt);
+          } else {
+            this._hardStopVoice(voice);
+          }
+        }
+      }
+
+      _releaseVoice(voice, now) {
+        const release = mapExp01(this.valueByName("amp_release", 48) / 127, 0.03, 3.2);
+        voice.node.gain.cancelScheduledValues(now);
+        voice.node.gain.setTargetAtTime(0.0001, now, Math.max(0.005, release * 0.3));
+        voice.released = true;
+        this._stopVoiceParts(voice, now + release + 0.08);
+      }
+
+      _stopVoiceParts(voice, stopAt) {
+        for (const part of (voice.parts || [])) {
+          try {
+            if (part.osc && part.osc.stop) {
+              part.osc.stop(stopAt);
+            }
+          } catch {}
+          if (part.gain) {
+            try {
+              part.gain.gain.setTargetAtTime(0.0001, this.ctx.currentTime, 0.01);
+            } catch {}
+          }
+        }
+        setTimeout(() => this._hardStopVoice(voice), Math.max(20, Math.floor((stopAt - this.ctx.currentTime) * 1000) + 20));
+      }
+
+      _hardStopVoice(voice) {
+        if (!voice) {
+          return;
+        }
+        for (const part of (voice.parts || [])) {
+          if (part.lfoDepth) {
+            try {
+              this.lfoOut.disconnect(part.lfoDepth);
+            } catch {}
+          }
+          if (part.osc) {
+            try {
+              if (part.osc.stop) {
+                part.osc.stop();
+              }
+            } catch {}
+            try {
+              part.osc.disconnect();
+            } catch {}
+          }
+          if (part.gain) {
+            try {
+              part.gain.disconnect();
+            } catch {}
+          }
+        }
+        if (voice.node) {
+          try {
+            voice.node.disconnect();
+          } catch {}
+        }
+        voice.parts = [];
+        voice.note = -1;
+        voice.released = true;
+      }
+
+      _updateVoiceLfoDepth(voice) {
+        const depth = this.valueByName("lfo_depth", 0) / 127;
+        const oscAmt = this.valueByName("lfo_osc_amt", 64) / 127;
+        const lfoDepthCents = depth * oscAmt * 135;
+        for (const node of (voice.lfoDepthNodes || [])) {
+          node.gain.setTargetAtTime(lfoDepthCents, this.ctx.currentTime, 0.02);
+        }
+      }
+
+      _updateVoiceNodes() {
+        if (!this.ctx) {
+          return;
+        }
+        for (const voice of this.voices) {
+          if (!voice || !voice.parts || voice.parts.length === 0) {
+            continue;
+          }
+          this._updateVoiceLfoDepth(voice);
+        }
+      }
+
+      _updateGlobalNodes() {
+        if (!this.ctx) {
+          return;
+        }
+        const now = this.ctx.currentTime;
+        const bypassFx = this.valueByName("bypass_fx", 0) >= 64;
+        const filterMode = this.valueByName("filter_mode", 0);
+        const cutoff = this.valueByName("filter_cutoff", 96) / 127;
+        const reso = mapLinear(this.valueByName("filter_reso", 24), 0, 127, 0.7, 16);
+        const cutoffHz = mapExp01(cutoff, 40, 15000);
+        const hpHz = (filterMode >= 64) ? cutoffHz : 20;
+        const lpHz = (filterMode >= 64) ? 18000 : cutoffHz;
+        this.hpFilter.frequency.setTargetAtTime(hpHz, now, 0.02);
+        this.lpFilter.frequency.setTargetAtTime(lpHz, now, 0.02);
+        this.hpFilter.Q.setTargetAtTime(reso, now, 0.02);
+        this.lpFilter.Q.setTargetAtTime(reso, now, 0.02);
+
+        const gainNorm = this.valueByName("amp_gain", 100) / 127;
+        // Raise top-end by ~10 dB so max AMP gain is meaningfully louder.
+        const masterGain = mapExp01(gainNorm, 0.0005, 2.85);
+        this.master.gain.setTargetAtTime(masterGain, now, 0.02);
+
+        const panNorm = mapLinear(this.valueByName("pan", 64), 0, 127, -1, 1);
+        this.panner.pan.setTargetAtTime(panNorm, now, 0.02);
+
+        const lfoNorm = this.valueByName("lfo_rate", 40) / 127;
+        const lfoMappedNorm = (65 + (lfoNorm * 62)) / 127;
+        const lfoShaped = lfoMappedNorm * lfoMappedNorm * lfoMappedNorm;
+        const lfoRateHz = mapExp01(lfoShaped, 0.2, 180.0);
+        this.lfoOsc.frequency.setTargetAtTime(lfoRateHz, now, 0.02);
+        this.lfoOsc.type = this._waveTypeFromParam("lfo_wave", "sine");
+
+        const chorusMix = this.valueByName("chorus_mix", 0) / 127;
+        const chorusDepthS = mapLinear(this.valueByName("chorus_depth", 64), 0, 127, 0.0004, 0.006);
+        const chorusBaseS = mapLinear(this.valueByName("chorus_delay", 64), 0, 127, 0.004, 0.024);
+        this.chorusDelay.delayTime.setTargetAtTime(chorusBaseS + chorusDepthS, now, 0.05);
+        this.chorusWet.gain.setTargetAtTime((bypassFx ? 0 : chorusMix * 0.55), now, 0.05);
+
+        const delayMix = this.valueByName("delay_mix", 0) / 127;
+        const delayTime = mapLinear(this.valueByName("delay_time", 93), 0, 127, 0.04, 0.8);
+        const delayFeedback = mapLinear(this.valueByName("delay_feedback", 64), 0, 127, 0.05, 0.84);
+        this.delayNode.delayTime.setTargetAtTime(delayTime, now, 0.05);
+        this.delayFeedback.gain.setTargetAtTime(delayFeedback, now, 0.05);
+        this.delayWet.gain.setTargetAtTime((bypassFx ? 0 : delayMix * 0.7), now, 0.05);
+
+        const reverbMix = this.valueByName("reverb_mix", 0) / 127;
+        this.reverbWet.gain.setTargetAtTime((bypassFx ? 0 : reverbMix * 0.55), now, 0.05);
+
+        this.wetGain.gain.setTargetAtTime(bypassFx ? 0 : 1.0, now, 0.04);
+        this.dryGain.gain.setTargetAtTime(1.0, now, 0.04);
+      }
+    }
+
+    function createEmulatorState() {
+      return {
+        connected: false,
+        startedMs: nowMs(),
+        lastStatsMs: nowMs(),
+        statsTick: 0,
+        audioCbOverBudget: 0,
+        serial: {
+          rx_lines: 0,
+          rx_overflow: 0,
+          rx_parse_errors: 0
+        },
+        state: seedLocalDefaults()
+      };
+    }
+
+    function ensureEmulator() {
+      if (!emulator) {
+        emulator = createEmulatorState();
+      }
+      return emulator;
+    }
+
+    function emulateEmit(payload, delayMs = 8) {
+      const jsonLine = JSON.stringify(payload);
+      setTimeout(() => {
+        void handleLine(jsonLine);
+      }, Math.max(0, delayMs));
+    }
+
+    function emulateBuildStats() {
+      const emu = ensureEmulator();
+      const now = nowMs();
+      const elapsedMs = Math.max(1, now - emu.startedMs);
+      const statsDeltaMs = Math.max(1, now - emu.lastStatsMs);
+      emu.lastStatsMs = now;
+      emu.statsTick += 1;
+
+      const audioFrames = Math.max(1, Math.floor(elapsedMs / 21));
+      const serialActivity = Math.min(1200, emu.serial.rx_lines * 3 + txCount + rxCount);
+      const audioCbLastUs = 10 + (serialActivity % 14);
+      const audioCbMaxUs = 190 + (serialActivity % 140);
+      const overBudgetDelta = (serialActivity > 700 && (emu.statsTick % 4 === 0)) ? 1 : 0;
+      emu.audioCbOverBudget += overBudgetDelta;
+      const pollRate = Math.max(1, Math.floor(1000 / statsDeltaMs));
+      const overBudgetPctX100 = Math.min(10000, Math.floor((overBudgetDelta * pollRate * 10000) / 48));
+
+      return {
+        type: "stats",
+        serial: {
+          rx_lines: emu.serial.rx_lines,
+          rx_overflow: emu.serial.rx_overflow,
+          rx_parse_errors: emu.serial.rx_parse_errors
+        },
+        runtime: {
+          queue_depth: 0,
+          dropped_midi: 0,
+          dropped_web: 0,
+          dropped_hardware: 0,
+          audio_overruns: 0,
+          audio_cb_last_us: audioCbLastUs,
+          audio_cb_max_us: audioCbMaxUs,
+          audio_frames: audioFrames,
+          audio_cb_over_budget: emu.audioCbOverBudget,
+          audio_cb_over_budget_delta: overBudgetDelta,
+          audio_cb_over_budget_pct_x100: overBudgetPctX100,
+          sample_rate_hz: 48000,
+          audio_frame_interval_us: 21,
+          audio_render_div: 2,
+          audio_callback_interval_us: 42,
+          chorus_enabled: 0,
+          delay_enabled: 0,
+          exp_mod_dest_enabled: 0,
+          restrict_osc_enabled: 0,
+          core0_loop_last_us: 70 + (serialActivity % 850),
+          core0_loop_max_us: 900 + (serialActivity % 3000),
+          core0_midi_poll_last_us: 130 + (serialActivity % 500),
+          core0_serial_poll_last_us: 100 + (serialActivity % 550),
+          core0_control_poll_last_us: 1
+        }
+      };
+    }
+
+    function emulateApplyParam(idRaw, valueRaw) {
+      const id = Number(idRaw);
+      if (!Number.isFinite(id)) {
+        return false;
+      }
+      const p = paramById.get(id);
+      if (!p) {
+        return false;
+      }
+      const next = clampByParamId(id, Number(valueRaw));
+      state[id] = next;
+      const emu = ensureEmulator();
+      emu.state[id] = next;
+      if (dspEngine) {
+        dspEngine.applyParam(id, next);
+      }
+      setControlValue(id, next);
+      return true;
+    }
+
+    function emulateApplyBatch(payload) {
+      const parts = String(payload || "").split(",");
+      let applied = 0;
+      for (const rawPart of parts) {
+        const part = rawPart.trim();
+        if (part.length === 0) {
+          continue;
+        }
+        const eq = part.indexOf("=");
+        if (eq <= 0 || eq >= part.length - 1) {
+          return -1;
+        }
+        const idPart = part.slice(0, eq).trim();
+        const valuePart = part.slice(eq + 1).trim();
+        if (!emulateApplyParam(idPart, valuePart)) {
+          return -1;
+        }
+        applied += 1;
+      }
+      return applied;
+    }
+
+    async function emulateCommand(line) {
+      const emu = ensureEmulator();
+      if (!emu.connected) {
+        return;
+      }
+      const text = String(line || "").trim();
+      if (text.length === 0) {
+        return;
+      }
+      emu.serial.rx_lines += 1;
+
+      if (text === "PING") {
+        emulateEmit({ type: "pong" });
+        return;
+      }
+      if (text === "META") {
+        emulateEmit({ type: "meta", pages: meta.pages, params: meta.params });
+        return;
+      }
+      if (text === "STATE") {
+        emulateEmit({ type: "state", values: emu.state });
+        return;
+      }
+      if (text === "STATS") {
+        emulateEmit(emulateBuildStats());
+        return;
+      }
+      if (text === "HELP") {
+        emulateEmit({
+          type: "help",
+          commands: [
+            "PING", "META", "STATE", "STATS",
+            "NOTEON <note> <vel>", "NOTEOFF <note> <vel>",
+            "SET <id> <value>", "SETQ <id> <value>",
+            "BATCH <id>=<value>,...", "BATCHQ <id>=<value>,..."
+          ]
+        });
+        return;
+      }
+      if (text.startsWith("NOTEON ") || text.startsWith("NOTEOFF ")) {
+        const parts = text.split(/\s+/);
+        if (parts.length >= 3) {
+          const note = clampMidi7(Number(parts[1]));
+          const vel = clampMidi7(Number(parts[2]));
+          if (dspEngine) {
+            if (text.startsWith("NOTEON ")) {
+              dspEngine.noteOn(note, vel);
+            } else {
+              dspEngine.noteOff(note);
+            }
+          }
+        }
+        return;
+      }
+      if (text.startsWith("SETQ ") || text.startsWith("SET ")) {
+        const quiet = text.startsWith("SETQ ");
+        const args = text.slice(quiet ? 5 : 4).trim().split(/\s+/);
+        if (args.length < 2 || !emulateApplyParam(args[0], args[1])) {
+          emu.serial.rx_parse_errors += 1;
+          emulateEmit({ type: "error", message: "invalid SET payload" });
+          return;
+        }
+        if (!quiet) {
+          const id = Number(args[0]);
+          emulateEmit({ type: "ack", cmd: "set", id, value: state[id] });
+        }
+        renderScreen();
+        return;
+      }
+      if (text.startsWith("BATCHQ ") || text.startsWith("BATCH ")) {
+        const quiet = text.startsWith("BATCHQ ");
+        const payload = text.slice(quiet ? 7 : 6).trim();
+        const applied = emulateApplyBatch(payload);
+        if (applied < 0) {
+          emu.serial.rx_parse_errors += 1;
+          emulateEmit({ type: "error", message: "invalid BATCH payload" });
+          return;
+        }
+        if (!quiet) {
+          emulateEmit({ type: "ack", cmd: "batch", applied });
+        }
+        renderScreen();
+        return;
+      }
+
+      emu.serial.rx_parse_errors += 1;
+      emulateEmit({ type: "error", message: "unknown command" });
+    }
+
+    async function connectEmulator() {
+      const emu = createEmulatorState();
+      emu.connected = true;
+      emulator = emu;
+
+      meta = LOCAL_SCHEMA;
+      rebuildParamIndex();
+      state = { ...emu.state };
+      dspEngine = new BrowserDspEngine(state, paramById, paramByName);
+      try {
+        await dspEngine.start();
+        dspEngine.applyAllParams(state);
+      } catch (err) {
+        pushLog("EMU DSP ERROR " + ((err && err.message) ? err.message : String(err)), true);
+        dspEngine = null;
+      }
+      renderPanelSections();
+      renderScreen();
+
+      setPortInfo();
+      setConnectedUi(true);
+      setStatus("Connected (Emu)", true);
+      pushLog("CONNECTED (EMU)", true);
+      startPolling();
+      queueLine("PING");
+      queueLine("STATS");
+    }
+
+    function pushAllCurrentState() {
+      const entries = Object.entries(state);
+      if (entries.length === 0) {
+        return;
+      }
+      const chunkSize = 20;
+      for (let i = 0; i < entries.length; i += chunkSize) {
+        const chunk = entries.slice(i, i + chunkSize);
+        const payload = chunk.map(([id, value]) => `${id}=${value}`).join(",");
+        queueLine(`BATCHQ ${payload}`);
+      }
+    }
+
+    function updateStatsView(stats) {
+      if (!stats) {
+        return;
+      }
+      const runtime = stats.runtime || {};
+      const overBudgetPctX100 = Number(runtime.audio_cb_over_budget_pct_x100);
+      const overBudgetPct = Number.isFinite(overBudgetPctX100)
+        ? `${(overBudgetPctX100 / 100).toFixed(2)}%`
+        : "--";
+      const lines = [
+        ["queue_depth", runtime.queue_depth],
+        ["dropped_midi", runtime.dropped_midi],
+        ["dropped_web", runtime.dropped_web],
+        ["dropped_hardware", runtime.dropped_hardware],
+        ["audio_overruns", runtime.audio_overruns],
+        ["audio_cb_last_us", runtime.audio_cb_last_us],
+        ["audio_cb_max_us", runtime.audio_cb_max_us],
+        ["audio_frames", runtime.audio_frames],
+        ["audio_cb_over_budget", runtime.audio_cb_over_budget],
+        ["audio_cb_over_budget_delta", runtime.audio_cb_over_budget_delta],
+        ["audio_cb_over_budget_pct", overBudgetPct],
+        ["sample_rate_hz", runtime.sample_rate_hz],
+        ["audio_frame_interval_us", runtime.audio_frame_interval_us],
+        ["audio_render_div", runtime.audio_render_div],
+        ["audio_callback_interval_us", runtime.audio_callback_interval_us],
+        ["chorus_enabled", runtime.chorus_enabled],
+        ["delay_enabled", runtime.delay_enabled],
+        ["exp_mod_dest_enabled", runtime.exp_mod_dest_enabled],
+        ["restrict_osc_enabled", runtime.restrict_osc_enabled],
+        ["core0_loop_last_us", runtime.core0_loop_last_us],
+        ["core0_loop_max_us", runtime.core0_loop_max_us],
+        ["core0_midi_poll_last_us", runtime.core0_midi_poll_last_us],
+        ["core0_serial_poll_last_us", runtime.core0_serial_poll_last_us],
+        ["core0_control_poll_last_us", runtime.core0_control_poll_last_us]
+      ];
+      statsGrid.innerHTML = "";
+      for (const [k, v] of lines) {
+        const kEl = document.createElement("span");
+        const vEl = document.createElement("span");
+        kEl.textContent = k;
+        vEl.textContent = (v === undefined) ? "--" : String(v);
+        statsGrid.append(kEl, vEl);
+      }
+      lastStats = stats;
+    }
+
+    function setKnobAngle(knobEl, value) {
+      const min = Number(knobEl.min || 0);
+      const max = Number(knobEl.max || 127);
+      const span = Math.max(1, max - min);
+      const normalized = (Number(value) - min) / span;
+      const angle = Math.round(Math.max(0, Math.min(1, normalized)) * 360);
+      knobEl.style.setProperty("--knob-angle", `${angle}deg`);
+    }
+
+    function setSliderFill(sliderEl, value) {
+      const min = Number(sliderEl.min || 0);
+      const max = Number(sliderEl.max || 127);
+      const span = Math.max(1, max - min);
+      const normalized = (Number(value) - min) / span;
+      const pct = Math.round(Math.max(0, Math.min(1, normalized)) * 100);
+      sliderEl.style.setProperty("--slider-fill", `${pct}%`);
+    }
+
+    function valueNormByName(name, fallback) {
+      const param = paramByName.get(name);
+      if (!param) {
+        return Math.max(0, Math.min(1, Number.isFinite(fallback) ? Number(fallback) : 0));
+      }
+      const fallbackValue = Number.isFinite(fallback) ? Number(fallback) : Number(param.default || 0);
+      const current = (state[param.id] !== undefined) ? Number(state[param.id]) : fallbackValue;
+      const clamped = clampParamValue(param, current);
+      const min = Number.isFinite(param.min) ? Number(param.min) : 0;
+      const max = Number.isFinite(param.max) ? Number(param.max) : 127;
+      const span = Math.max(1, max - min);
+      return Math.max(0, Math.min(1, (clamped - min) / span));
+    }
+
+    function setCanvasDpr(canvas) {
+      if (!canvas) {
+        return null;
+      }
+      const bounds = canvas.getBoundingClientRect();
+      const width = Math.max(16, Math.round(bounds.width));
+      const height = Math.max(16, Math.round(bounds.height));
+      const dpr = Math.max(1, window.devicePixelRatio || 1);
+      const pixelWidth = Math.round(width * dpr);
+      const pixelHeight = Math.round(height * dpr);
+      if (canvas.width !== pixelWidth || canvas.height !== pixelHeight) {
+        canvas.width = pixelWidth;
+        canvas.height = pixelHeight;
+      }
+      const ctx = canvas.getContext("2d");
+      if (!ctx) {
+        return null;
+      }
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      return { ctx, width, height };
+    }
+
+    function drawEnvelopeVisualizer() {
+      const configured = setCanvasDpr(envVizCanvas);
+      if (!configured) {
+        return;
+      }
+      const { ctx, width, height } = configured;
+      const padX = 8;
+      const padY = 8;
+      const x0 = padX;
+      const x4 = Math.max(x0 + 20, width - padX);
+      const yTop = padY;
+      const yBottom = Math.max(yTop + 20, height - padY);
+      const plotW = x4 - x0;
+      const plotH = yBottom - yTop;
+
+      ctx.clearRect(0, 0, width, height);
+      ctx.strokeStyle = "rgba(144, 176, 204, 0.22)";
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      for (let i = 0; i <= 4; ++i) {
+        const x = x0 + (plotW * i) / 4;
+        ctx.moveTo(x, yTop);
+        ctx.lineTo(x, yBottom);
+      }
+      for (let i = 0; i <= 4; ++i) {
+        const y = yTop + (plotH * i) / 4;
+        ctx.moveTo(x0, y);
+        ctx.lineTo(x4, y);
+      }
+      ctx.stroke();
+
+      const attack = valueNormByName("amp_attack", 0 / 127);
+      const decay = valueNormByName("amp_decay", 48 / 127);
+      const sustain = valueNormByName("amp_sustain", 127 / 127);
+      const release = valueNormByName("amp_release", 48 / 127);
+      const aW = 0.1 + attack * 0.24;
+      const dW = 0.1 + decay * 0.24;
+      const rW = 0.12 + release * 0.28;
+      const sW = Math.max(0.1, 1 - aW - dW - rW);
+      const x1 = x0 + plotW * aW;
+      const x2 = x1 + plotW * dW;
+      const x3 = Math.min(x4 - plotW * rW, x2 + plotW * sW);
+      const yPeak = yTop + plotH * 0.06;
+      const ySustain = yBottom - (0.08 + sustain * 0.84) * plotH;
+
+      ctx.beginPath();
+      ctx.moveTo(x0, yBottom);
+      ctx.lineTo(x1, yPeak);
+      ctx.lineTo(x2, ySustain);
+      ctx.lineTo(x3, ySustain);
+      ctx.lineTo(x4, yBottom);
+      ctx.strokeStyle = "#ff7e72";
+      ctx.lineWidth = 2.2;
+      ctx.lineJoin = "round";
+      ctx.lineCap = "round";
+      ctx.stroke();
+
+      ctx.beginPath();
+      ctx.moveTo(x0, yBottom);
+      ctx.lineTo(x1, yPeak);
+      ctx.lineTo(x2, ySustain);
+      ctx.lineTo(x3, ySustain);
+      ctx.lineTo(x4, yBottom);
+      ctx.closePath();
+      ctx.fillStyle = "rgba(255, 126, 114, 0.16)";
+      ctx.fill();
+    }
+
+    function drawFilterVisualizer() {
+      const configured = setCanvasDpr(filterVizCanvas);
+      if (!configured) {
+        return;
+      }
+      const { ctx, width, height } = configured;
+      const padX = 8;
+      const padY = 8;
+      const xMin = padX;
+      const xMax = Math.max(xMin + 20, width - padX);
+      const yMin = padY;
+      const yMax = Math.max(yMin + 20, height - padY);
+      const plotW = xMax - xMin;
+      const plotH = yMax - yMin;
+
+      ctx.clearRect(0, 0, width, height);
+      ctx.strokeStyle = "rgba(144, 176, 204, 0.22)";
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      for (let i = 0; i <= 4; ++i) {
+        const x = xMin + (plotW * i) / 4;
+        ctx.moveTo(x, yMin);
+        ctx.lineTo(x, yMax);
+      }
+      for (let i = 0; i <= 4; ++i) {
+        const y = yMin + (plotH * i) / 4;
+        ctx.moveTo(xMin, y);
+        ctx.lineTo(xMax, y);
+      }
+      ctx.stroke();
+
+      const filterMode = valueNormByName("filter_mode", 0) >= 0.5 ? "hp" : "lp";
+      const cutoff = valueNormByName("filter_cutoff", 96 / 127);
+      const resonance = valueNormByName("filter_reso", 24 / 127);
+      const cutoffPos = 0.06 + cutoff * 0.88;
+      const slope = 8 + resonance * 24;
+      const sigma = 0.012 + (1 - resonance) * 0.08;
+      const maxResponse = 1.2;
+      const pointCount = 80;
+
+      ctx.beginPath();
+      for (let i = 0; i < pointCount; ++i) {
+        const t = i / (pointCount - 1);
+        const logistic = 1 / (1 + Math.exp((t - cutoffPos) * slope));
+        const base = (filterMode === "hp") ? (1 - logistic) : logistic;
+        const distance = t - cutoffPos;
+        const peak = Math.exp(-(distance * distance) / (2 * sigma * sigma));
+        const response = Math.max(0, Math.min(maxResponse, base + peak * (0.08 + resonance * 0.56)));
+        const x = xMin + t * plotW;
+        const y = yMax - (response / maxResponse) * plotH;
+        if (i === 0) {
+          ctx.moveTo(x, y);
+        } else {
+          ctx.lineTo(x, y);
+        }
+      }
+      ctx.strokeStyle = "#6ed7ff";
+      ctx.lineWidth = 2.2;
+      ctx.lineCap = "round";
+      ctx.lineJoin = "round";
+      ctx.stroke();
+    }
+
+    function drawVisualizers() {
+      drawEnvelopeVisualizer();
+      drawFilterVisualizer();
+    }
+
+    function scheduleVisualizerDraw() {
+      if (visualizerRaf) {
+        return;
+      }
+      visualizerRaf = requestAnimationFrame(() => {
+        visualizerRaf = 0;
+        drawVisualizers();
+      });
+    }
+
+    function renderScreen() {
+      if (!meta) {
+        screenEl.textContent = "WAITING FOR META...";
+        return;
+      }
+      const lines = [];
+      lines.push("PICO2W SYNTH");
+      lines.push("------------");
+      lines.push(`MODE ${uiMode.toUpperCase()}`);
+      lines.push("");
+      for (const name of PANEL_FOCUS_LINES) {
+        const p = paramByName.get(name);
+        if (!p) {
+          continue;
+        }
+        const v = (state[p.id] !== undefined) ? state[p.id] : p.default;
+        const key = (p.name + " ").slice(0, 15).padEnd(15, " ");
+        lines.push(`${key}${formatParamValue(p, v).padStart(3, " ")}`);
+      }
+      if (lines.length <= 4) {
+        lines.push("NO PARAMS");
+      }
+      if (lastStats && lastStats.runtime) {
+        lines.push("");
+        lines.push(`Q ${String(lastStats.runtime.queue_depth || 0).padStart(3, " ")}` +
+          `  DR ${String(lastStats.runtime.dropped_web || 0).padStart(3, " ")}`);
+      }
+      screenEl.textContent = lines.join("\n");
+      scheduleVisualizerDraw();
+    }
+
+    function setUiMode(nextMode) {
+      uiMode = (nextMode === "advanced") ? "advanced" : "simple";
+      uiModeBtn.textContent = (uiMode === "simple") ? "Simple Mode" : "Advanced Mode";
+      if (meta && Array.isArray(meta.params)) {
+        renderPanelSections();
+        renderScreen();
+      }
+    }
+
+    function createSwitchControl(param, current) {
+      const wrap = document.createElement("div");
+      const sw = document.createElement("button");
+      sw.type = "button";
+      sw.className = "switch" + (current >= 64 ? " on" : "");
+      const note = document.createElement("div");
+      note.className = "switch-note";
+      note.textContent = current >= 64 ? "enabled" : "disabled";
+      sw.onclick = () => {
+        const next = (state[param.id] || 0) >= 64 ? 0 : 127;
+        state[param.id] = next;
+        if (dspEngine) {
+          dspEngine.applyParam(param.id, next);
+        }
+        pending[param.id] = next;
+        lastLocalEditMs = nowMs();
+        sw.className = "switch" + (next >= 64 ? " on" : "");
+        note.textContent = next >= 64 ? "enabled" : "disabled";
+        scheduleFlush();
+        renderScreen();
+      };
+      wrap.append(sw, note);
+      return { wrap, sw, note };
+    }
+
+    function createToggleControl(param, current, spec, valueEl) {
+      const wrap = document.createElement("div");
+      const toggle = document.createElement("div");
+      toggle.className = "toggle";
+      const options = Array.isArray(spec && spec.options) ? spec.options : [
+        { value: 0, label: "A" },
+        { value: 127, label: "B" }
+      ];
+      const buttons = [];
+      const setActive = (nextValue, emit) => {
+        const clamped = clampParamValue(param, nextValue);
+        for (const btn of buttons) {
+          btn.classList.toggle("active", Number(btn.dataset.value) === clamped);
+        }
+        valueEl.textContent = formatParamValue(param, clamped);
+        if (!emit) {
+          return;
+        }
+        state[param.id] = clamped;
+        if (dspEngine) {
+          dspEngine.applyParam(param.id, clamped);
+        }
+        pending[param.id] = clamped;
+        lastLocalEditMs = nowMs();
+        setControlValue(param.id, clamped);
+        scheduleFlush();
+        renderScreen();
+      };
+
+      for (const option of options) {
+        const btn = document.createElement("button");
+        btn.type = "button";
+        btn.className = "toggle-btn";
+        btn.textContent = option.label;
+        btn.dataset.value = String(clampParamValue(param, Number(option.value)));
+        btn.onclick = () => setActive(Number(btn.dataset.value), true);
+        buttons.push(btn);
+        toggle.appendChild(btn);
+      }
+
+      setActive(current, false);
+      wrap.appendChild(toggle);
+      return { wrap, buttons, options };
+    }
+
+    function isHeavyParam(param) {
+      if (!param || !param.name) {
+        return false;
+      }
+      if (param.page === "fx") {
+        return true;
+      }
+      return /^(osc1_wave|osc2_wave|osc3_wave|osc4_wave|osc1_shape|osc1_morph|sub_noise_mix|osc1_freq|osc2_coarse|osc3_freq|osc4_freq|osc2_detune|osc_drift|lfo_osc_dst|eg_osc_dst)$/.test(param.name);
+    }
+
+    function createKnobControl(param, current, valueEl, spec = {}, options = {}) {
+      const wrap = document.createElement("div");
+      wrap.className = "knob-wrap";
+      const heavyParam = (options.heavyParam !== undefined) ? Boolean(options.heavyParam) : isHeavyParam(param);
+      const knob = document.createElement("input");
+      knob.className = "knob" + ((spec.control === "click-knob") ? " click-knob" : "");
+      knob.type = "range";
+      knob.min = String(param.min);
+      knob.max = String(param.max);
+      if (spec.control === "click-knob") {
+        knob.step = "1";
+      }
+      const normalizedCurrent = clampParamValue(param, current);
+      knob.value = String(normalizedCurrent);
+      setKnobAngle(knob, normalizedCurrent);
+      let lastCommitted = normalizedCurrent;
+      const modeParam = paramByName.get("filter_mode");
+      const forcedMode = Number.isFinite(options.forceFilterMode) && modeParam
+        ? clampParamValue(modeParam, Number(options.forceFilterMode))
+        : null;
+
+      const maybeApplyForcedMode = () => {
+        if (forcedMode === null || !modeParam) {
+          return false;
+        }
+        if (state[modeParam.id] === forcedMode) {
+          return false;
+        }
+        state[modeParam.id] = forcedMode;
+        if (dspEngine) {
+          dspEngine.applyParam(modeParam.id, forcedMode);
+        }
+        pending[modeParam.id] = forcedMode;
+        setControlValue(modeParam.id, forcedMode);
+        return true;
+      };
+
+      const commitHeavyParam = () => {
+        if (!heavyParam) {
+          return;
+        }
+        const v = clampParamValue(param, Number(knob.value));
+        knob.value = String(v);
+        const modeChanged = maybeApplyForcedMode();
+        if (v === lastCommitted) {
+          if (modeChanged) {
+            lastLocalEditMs = nowMs();
+            scheduleFlush(HEAVY_RELEASE_FLUSH_DELAY_MS);
+            renderScreen();
+          }
+          return;
+        }
+        lastCommitted = v;
+        state[param.id] = v;
+        pending[param.id] = v;
+        lastLocalEditMs = nowMs();
+        scheduleFlush(HEAVY_RELEASE_FLUSH_DELAY_MS);
+        renderScreen();
+      };
+
+      knob.oninput = () => {
+        const v = clampParamValue(param, Number(knob.value));
+        knob.value = String(v);
+        setKnobAngle(knob, v);
+        valueEl.textContent = formatParamValue(param, v);
+        state[param.id] = v;
+        if (dspEngine) {
+          dspEngine.applyParam(param.id, v);
+        }
+        maybeApplyForcedMode();
+        lastLocalEditMs = nowMs();
+        if (!heavyParam) {
+          pending[param.id] = v;
+          lastCommitted = v;
+          scheduleFlush(LIVE_FLUSH_DELAY_MS);
+        }
+        renderScreen();
+      };
+      knob.onchange = commitHeavyParam;
+      knob.addEventListener("pointerup", commitHeavyParam);
+      knob.addEventListener("touchend", commitHeavyParam, { passive: true });
+      wrap.appendChild(knob);
+      return { wrap, knob };
+    }
+
+    function createSliderControl(param, current, valueEl, options = {}) {
+      const wrap = document.createElement("div");
+      wrap.className = "slider-wrap";
+      const heavyParam = (options.heavyParam !== undefined) ? Boolean(options.heavyParam) : isHeavyParam(param);
+      const slider = document.createElement("input");
+      slider.className = "level-slider";
+      slider.type = "range";
+      slider.min = String(param.min);
+      slider.max = String(param.max);
+      slider.step = "1";
+      const normalizedCurrent = clampParamValue(param, current);
+      slider.value = String(normalizedCurrent);
+      setSliderFill(slider, normalizedCurrent);
+
+      slider.oninput = () => {
+        const v = clampParamValue(param, Number(slider.value));
+        slider.value = String(v);
+        setSliderFill(slider, v);
+        valueEl.textContent = formatParamValue(param, v);
+        state[param.id] = v;
+        if (dspEngine) {
+          dspEngine.applyParam(param.id, v);
+        }
+        lastLocalEditMs = nowMs();
+        if (!heavyParam) {
+          pending[param.id] = v;
+          scheduleFlush(LIVE_FLUSH_DELAY_MS);
+        }
+        renderScreen();
+      };
+
+      slider.onchange = () => {
+        if (!heavyParam) {
+          return;
+        }
+        const v = clampParamValue(param, Number(slider.value));
+        slider.value = String(v);
+        setSliderFill(slider, v);
+        state[param.id] = v;
+        if (dspEngine) {
+          dspEngine.applyParam(param.id, v);
+        }
+        pending[param.id] = v;
+        lastLocalEditMs = nowMs();
+        scheduleFlush(HEAVY_RELEASE_FLUSH_DELAY_MS);
+        renderScreen();
+      };
+
+      wrap.appendChild(slider);
+      return { wrap, slider };
+    }
+
+    function setControlValue(id, value) {
+      const bindings = controlBindings.get(Number(id));
+      const param = paramById.get(Number(id));
+      const next = clampByParamId(id, value);
+      if (!bindings || bindings.length === 0) {
+        return;
+      }
+      for (const binding of bindings) {
+        if (binding.type === "switch") {
+          const on = next >= 64;
+          binding.sw.className = "switch" + (on ? " on" : "");
+          binding.note.textContent = on ? "enabled" : "disabled";
+          binding.valueEl.textContent = formatParamValue(param, next);
+          continue;
+        }
+        if (binding.type === "toggle") {
+          for (const btn of binding.buttons) {
+            btn.classList.toggle("active", Number(btn.dataset.value) === next);
+          }
+          binding.valueEl.textContent = formatParamValue(param, next);
+          continue;
+        }
+        if (binding.type === "slider") {
+          binding.slider.value = String(next);
+          setSliderFill(binding.slider, next);
+          binding.valueEl.textContent = formatParamValue(param, next);
+          continue;
+        }
+        binding.knob.value = String(next);
+        setKnobAngle(binding.knob, next);
+        binding.valueEl.textContent = formatParamValue(param, next);
+        if (Number.isFinite(binding.forceFilterMode)) {
+          const modeParam = paramByName.get("filter_mode");
+          const modeValue = modeParam ? clampParamValue(modeParam, state[modeParam.id]) : 0;
+          const isActive = modeValue === binding.forceFilterMode;
+          binding.wrap.classList.toggle("inactive", !isActive);
+        }
+      }
+      if (param && param.name === "filter_mode") {
+        const cutoffParam = paramByName.get("filter_cutoff");
+        if (cutoffParam) {
+          const cutoffValue = (state[cutoffParam.id] !== undefined) ? state[cutoffParam.id] : cutoffParam.default;
+          setControlValue(cutoffParam.id, cutoffValue);
+        }
+      }
+      scheduleVisualizerDraw();
+    }
+
+    function registerControlBinding(paramId, binding) {
+      const id = Number(paramId);
+      const existing = controlBindings.get(id);
+      if (existing) {
+        existing.push(binding);
+      } else {
+        controlBindings.set(id, [binding]);
+      }
+    }
+
+    function controlKey(param) {
+      if (!param) {
+        return "";
+      }
+      if (param.virtualId) {
+        return String(param.virtualId);
+      }
+      if (param.name) {
+        return String(param.name);
+      }
+      return "";
+    }
+
+    function createDisplayParams(page, params) {
+      if (page !== "filter") {
+        let result = params.slice();
+        if (uiMode === "simple") {
+          const visible = SIMPLE_VISIBLE_CONTROLS[page];
+          if (Array.isArray(visible)) {
+            const visibleSet = new Set(visible);
+            result = result.filter((p) => visibleSet.has(controlKey(p)));
+            const order = new Map(visible.map((key, index) => [key, index]));
+            result.sort((a, b) => {
+              const ai = order.has(controlKey(a)) ? order.get(controlKey(a)) : 999;
+              const bi = order.has(controlKey(b)) ? order.get(controlKey(b)) : 999;
+              return Number(ai) - Number(bi);
+            });
+          }
+          result = result.map((p) => {
+            const override = SIMPLE_LABEL_OVERRIDES[controlKey(p)];
+            return override ? { ...p, uiLabel: override } : p;
+          });
+        }
+        return result;
+      }
+      const result = [];
+      const cutoffParam = params.find((p) => p.name === "filter_cutoff");
+      if (cutoffParam) {
+        for (const virtual of FILTER_VIRTUAL_CONTROLS) {
+          result.push({
+            ...cutoffParam,
+            virtualId: virtual.id,
+            virtualSourceId: cutoffParam.id,
+            name: virtual.id,
+            uiLabel: virtual.label,
+            uiGuide: virtual.guide,
+            uiControl: "knob",
+            forceFilterMode: virtual.forceFilterMode
+          });
+        }
+      }
+      for (const param of params) {
+        if (param.name === "filter_cutoff") {
+          continue;
+        }
+        result.push(param);
+      }
+      if (uiMode === "simple") {
+        const visible = SIMPLE_VISIBLE_CONTROLS[page];
+        if (Array.isArray(visible)) {
+          const visibleSet = new Set(visible);
+          for (let i = result.length - 1; i >= 0; --i) {
+            if (!visibleSet.has(controlKey(result[i]))) {
+              result.splice(i, 1);
+            }
+          }
+          const order = new Map(visible.map((key, index) => [key, index]));
+          result.sort((a, b) => {
+            const ai = order.has(controlKey(a)) ? order.get(controlKey(a)) : 999;
+            const bi = order.has(controlKey(b)) ? order.get(controlKey(b)) : 999;
+            return Number(ai) - Number(bi);
+          });
+        }
+        for (let i = 0; i < result.length; ++i) {
+          const override = SIMPLE_LABEL_OVERRIDES[controlKey(result[i])];
+          if (override) {
+            result[i] = { ...result[i], uiLabel: override };
+          }
+        }
+      }
+      return result;
+    }
+
+    function createSectionChain(page) {
+      let labels = null;
+      if (page === "osc") {
+        labels = ["OSC1", "OSC2", "OSC3", "OSC4"];
+      } else if (page === "filter") {
+        labels = ["HP", "LP", "RES"];
+      } else if (page === "fx") {
+        labels = ["CHORUS", "DELAY", "REVERB"];
+      } else if (page === "env") {
+        labels = ["EG", "AMP", "OUT"];
+      }
+      if (!labels) {
+        return null;
+      }
+      const chain = document.createElement("div");
+      chain.className = "section-chain mono";
+      for (let i = 0; i < labels.length; ++i) {
+        const node = document.createElement("span");
+        node.className = "chain-node";
+        node.textContent = labels[i];
+        chain.appendChild(node);
+        if (i < labels.length - 1) {
+          const link = document.createElement("span");
+          link.className = "chain-link";
+          chain.appendChild(link);
+        }
+      }
+      return chain;
+    }
+
+    function createOscillatorControls(pageParams) {
+      const controls = document.createElement("div");
+      controls.className = "section-controls osc-groups";
+      const pageParamByName = new Map();
+      for (const param of pageParams) {
+        if (param && param.name) {
+          pageParamByName.set(param.name, param);
+        }
+      }
+
+      const firstParamFromList = (names) => {
+        for (const name of names) {
+          const hit = pageParamByName.get(name);
+          if (hit) {
+            return hit;
+          }
+        }
+        return null;
+      };
+
+      const groups = [
+        {
+          title: "OSC1",
+          controls: [
+            { names: ["osc1_shape", "osc1_wave"], label: "Wave Type", guide: "Wave family for oscillator 1." },
+            { names: ["osc1_freq", "osc_drift"], label: "Frequency", guide: "Coarse frequency for oscillator 1." },
+            { names: ["osc1_morph"], label: "Pulse Width", guide: "Pulse width / wave morph amount for oscillator 1." },
+            { names: ["osc2_detune"], label: "Fine", guide: "Fine detune amount around oscillator 1 frequency center." },
+            { names: ["sub_noise_mix"], label: "Sub/Noise", guide: "Blend sub oscillator and noise into oscillator 1 tone." },
+            { names: ["osc_drift"], label: "Drift", guide: "Global oscillator drift around center tuning." },
+            { names: ["portamento"], label: "Glide", guide: "Portamento time between notes." },
+            { names: ["osc1_level"], label: "Level", guide: "Oscillator 1 mixer level." }
+          ]
+        },
+        {
+          title: "OSC2",
+          controls: [
+            { names: ["osc2_wave"], label: "Wave Type", guide: "Wave family for oscillator 2." },
+            { names: ["osc2_coarse"], label: "Frequency", guide: "Coarse frequency for oscillator 2." },
+            { names: ["osc2_level"], label: "Level", guide: "Oscillator 2 mixer level." }
+          ]
+        },
+        {
+          title: "OSC3",
+          controls: [
+            { names: ["osc3_wave"], label: "Wave Type", guide: "Wave family for oscillator 3." },
+            { names: ["osc3_freq", "osc2_detune"], label: "Frequency", guide: "Coarse frequency for oscillator 3." },
+            { names: ["osc3_level"], label: "Level", guide: "Oscillator 3 mixer level." }
+          ]
+        },
+        {
+          title: "OSC4",
+          controls: [
+            { names: ["osc4_wave"], label: "Wave Type", guide: "Wave family for oscillator 4." },
+            { names: ["osc4_freq", "osc2_detune"], label: "Frequency", guide: "Coarse frequency for oscillator 4." },
+            { names: ["osc4_level"], label: "Level", guide: "Oscillator 4 mixer level." }
+          ]
+        }
+      ];
+
+      for (const groupDef of groups) {
+        const group = document.createElement("article");
+        group.className = "osc-group";
+        if (groupDef.title === "OSC1") {
+          group.classList.add("osc1-layout");
+        }
+        const head = document.createElement("div");
+        head.className = "osc-group-head";
+        const title = document.createElement("h3");
+        title.className = "osc-group-title";
+        title.textContent = groupDef.title;
+        const metaTag = document.createElement("span");
+        metaTag.className = "osc-group-meta mono";
+        metaTag.textContent = "Wave / Freq / Level";
+        head.append(title, metaTag);
+        group.appendChild(head);
+
+        const groupControls = document.createElement("div");
+        groupControls.className = "osc-group-controls";
+        for (const controlDef of groupDef.controls) {
+          const param = firstParamFromList(controlDef.names);
+          if (!param) {
+            continue;
+          }
+          const card = createControlCard({ ...param, uiLabel: controlDef.label, uiGuide: controlDef.guide });
+          card.classList.add("osc-card");
+          groupControls.appendChild(card);
+        }
+        if (groupControls.children.length === 0) {
+          const empty = document.createElement("div");
+          empty.className = "section-empty mono";
+          empty.textContent = "No mapped controls";
+          groupControls.appendChild(empty);
+        }
+        group.appendChild(groupControls);
+        controls.appendChild(group);
+      }
+
+      if (uiMode !== "simple") {
+        const extras = document.createElement("div");
+        extras.className = "osc-extras";
+        const extraNames = ["osc_mix"];
+        for (const name of extraNames) {
+          const param = pageParamByName.get(name);
+          if (!param) {
+            continue;
+          }
+          extras.appendChild(createControlCard(param));
+        }
+        if (extras.children.length > 0) {
+          controls.appendChild(extras);
+        }
+      }
+
+      return controls;
+    }
+
+    function createControlCard(param) {
+      const card = document.createElement("article");
+      card.className = "card";
+
+      const spec = uiSpecForParam(param);
+      const label = param.uiLabel || spec.label || param.name;
+      const guide = param.uiGuide || spec.guide || "";
+      const controlType = param.uiControl || spec.control || "knob";
+
+      const headEl = document.createElement("div");
+      headEl.className = "card-head";
+      const nameEl = document.createElement("div");
+      nameEl.className = "name";
+      nameEl.textContent = label;
+      const typeEl = document.createElement("div");
+      typeEl.className = "ctrl-type";
+      typeEl.textContent = controlType;
+      headEl.append(nameEl, typeEl);
+
+      const sourceId = Number.isFinite(param.virtualSourceId) ? Number(param.virtualSourceId) : Number(param.id);
+      const sourceParam = paramById.get(sourceId) || param;
+      if (sourceParam && sourceParam.name) {
+        card.classList.add(`param-${String(sourceParam.name).replace(/[^a-z0-9_]/gi, "-").toLowerCase()}`);
+      }
+      const current = (state[sourceId] !== undefined) ? state[sourceId] : sourceParam.default;
+      const normalizedCurrent = clampParamValue(sourceParam, current);
+      const valueEl = document.createElement("div");
+      valueEl.className = "value mono";
+      valueEl.textContent = formatParamValue(sourceParam, normalizedCurrent);
+      const guideEl = document.createElement("div");
+      guideEl.className = "guide";
+      guideEl.textContent = guide;
+
+      if (controlType === "switch") {
+        const ctrl = createSwitchControl(sourceParam, normalizedCurrent);
+        registerControlBinding(sourceId, { type: "switch", sw: ctrl.sw, note: ctrl.note, valueEl });
+        card.append(headEl, ctrl.wrap, guideEl, valueEl);
+        return card;
+      }
+
+      if (controlType === "toggle") {
+        const ctrl = createToggleControl(sourceParam, normalizedCurrent, spec, valueEl);
+        registerControlBinding(sourceId, { type: "toggle", buttons: ctrl.buttons, options: ctrl.options, valueEl });
+        card.append(headEl, ctrl.wrap, guideEl, valueEl);
+        return card;
+      }
+
+      if (controlType === "slider") {
+        const ctrl = createSliderControl(sourceParam, normalizedCurrent, valueEl, { heavyParam: isHeavyParam(sourceParam) });
+        registerControlBinding(sourceId, { type: "slider", slider: ctrl.slider, valueEl });
+        card.append(headEl, ctrl.wrap, guideEl, valueEl);
+        return card;
+      }
+
+      const forceFilterMode = Number.isFinite(param.forceFilterMode) ? Number(param.forceFilterMode) : null;
+      const ctrl = createKnobControl(
+        sourceParam,
+        normalizedCurrent,
+        valueEl,
+        { ...spec, control: controlType },
+        { forceFilterMode, heavyParam: isHeavyParam(sourceParam) }
+      );
+      if (forceFilterMode !== null) {
+        const modeParam = paramByName.get("filter_mode");
+        const currentMode = modeParam ? clampParamValue(modeParam, state[modeParam.id]) : 0;
+        ctrl.wrap.classList.toggle("inactive", currentMode !== forceFilterMode);
+      }
+      registerControlBinding(sourceId, { type: "knob", knob: ctrl.knob, valueEl, wrap: ctrl.wrap, forceFilterMode });
+      card.append(headEl, ctrl.wrap, guideEl, valueEl);
+      return card;
+    }
+
+    function createVisualizerCard(kind) {
+      const card = document.createElement("article");
+      card.className = "card viz-card";
+
+      const head = document.createElement("div");
+      head.className = "card-head";
+
+      const name = document.createElement("div");
+      name.className = "name";
+      name.textContent = (kind === "env") ? "Envelope View" : "Filter View";
+
+      const type = document.createElement("div");
+      type.className = "ctrl-type mono";
+      type.textContent = "viz";
+      head.append(name, type);
+
+      const frame = document.createElement("div");
+      frame.className = "viz-frame";
+      const canvas = document.createElement("canvas");
+      canvas.className = "viz-canvas";
+      frame.appendChild(canvas);
+
+      const caption = document.createElement("div");
+      caption.className = "viz-caption";
+      caption.textContent = (kind === "env")
+        ? "ADSR contour preview from current envelope settings."
+        : "Frequency response preview from cutoff, resonance, and mode.";
+
+      if (kind === "env") {
+        envVizCanvas = canvas;
+      } else if (kind === "filter") {
+        filterVizCanvas = canvas;
+      }
+
+      card.append(head, frame, caption);
+      return card;
+    }
+
+    function resolvePanelPages() {
+      if (!meta || !Array.isArray(meta.params)) {
+        return [];
+      }
+      const pagesFromParams = new Set(meta.params.map((p) => p.page).filter(Boolean));
+      const pagesFromMeta = Array.isArray(meta.pages) ? meta.pages : [];
+      const seen = new Set();
+      const pages = [];
+      for (const page of PANEL_SECTION_ORDER) {
+        if (!pagesFromParams.has(page) && !pagesFromMeta.includes(page)) {
+          continue;
+        }
+        if (!seen.has(page)) {
+          pages.push(page);
+          seen.add(page);
+        }
+      }
+      for (const page of pagesFromMeta) {
+        if (!seen.has(page)) {
+          pages.push(page);
+          seen.add(page);
+        }
+      }
+      return pages;
+    }
+
+    function renderPanelSections() {
+      panelSectionsEl.innerHTML = "";
+      controlBindings.clear();
+      envVizCanvas = null;
+      filterVizCanvas = null;
+      if (!meta || !Array.isArray(meta.params)) {
+        return;
+      }
+
+      const pages = resolvePanelPages();
+      for (const page of pages) {
+        const sectionInfo = PANEL_SECTION_META[page] || {
+          title: String(page || "Section"),
+          subtitle: "Parameter group"
+        };
+        const section = document.createElement("section");
+        section.className = `synth-section section-${String(page).toLowerCase()}`;
+
+        const head = document.createElement("header");
+        head.className = "section-head";
+        const titleWrap = document.createElement("div");
+        const title = document.createElement("h2");
+        title.className = "section-title";
+        title.textContent = sectionInfo.title;
+        const subtitle = document.createElement("p");
+        subtitle.className = "section-subtitle";
+        subtitle.textContent = sectionInfo.subtitle;
+        titleWrap.append(title, subtitle);
+        const modeTag = document.createElement("span");
+        modeTag.className = "section-mode mono";
+        modeTag.textContent = uiMode === "simple" ? "Simple" : "Advanced";
+        head.append(titleWrap, modeTag);
+        section.appendChild(head);
+
+        const chain = createSectionChain(page);
+        if (chain) {
+          section.appendChild(chain);
+        }
+
+        const pageParams = meta.params.filter((p) => p.page === page);
+        if (page === "osc") {
+          section.appendChild(createOscillatorControls(pageParams));
+        } else {
+          const controls = document.createElement("div");
+          controls.className = "section-controls";
+          const displayParams = createDisplayParams(page, pageParams);
+          if (displayParams.length === 0) {
+            const empty = document.createElement("div");
+            empty.className = "section-empty mono";
+            empty.textContent = "No mapped controls";
+            controls.appendChild(empty);
+          } else {
+            for (const param of displayParams) {
+              controls.appendChild(createControlCard(param));
+            }
+          }
+          if (page === "env") {
+            controls.appendChild(createVisualizerCard("env"));
+          } else if (page === "filter") {
+            controls.appendChild(createVisualizerCard("filter"));
+          }
+          section.appendChild(controls);
+        }
+        panelSectionsEl.appendChild(section);
+      }
+      scheduleVisualizerDraw();
+    }
+
+    function applyState(values) {
+      if (!values || typeof values !== "object") {
+        return;
+      }
+      let anyChange = false;
+      for (const id of Object.keys(values)) {
+        const idx = Number(id);
+        const next = clampByParamId(idx, Number(values[id]));
+        if (state[idx] === next) {
+          continue;
+        }
+        state[idx] = next;
+        if (dspEngine) {
+          dspEngine.applyParam(idx, next);
+        }
+        setControlValue(idx, next);
+        anyChange = true;
+      }
+      if (controlBindings.size === 0 && meta) {
+        renderPanelSections();
+        anyChange = true;
+      }
+      if (anyChange) {
+        renderScreen();
+        scheduleVisualizerDraw();
+      }
+    }
+
+    async function handleJson(msg) {
+      if (!msg || typeof msg !== "object") {
+        return;
+      }
+      if (msg.type === "pong" || msg.type === "ack" || msg.type === "help") {
+        return;
+      }
+      if (msg.type === "meta" && Array.isArray(msg.params)) {
+        const schema = normalizeSchema({
+          pages: Array.isArray(msg.pages) ? msg.pages : [],
+          params: msg.params
+        });
+        meta = schema;
+        rebuildParamIndex();
+        if (!state || Object.keys(state).length === 0) {
+          state = seedLocalDefaults();
+        }
+        renderPanelSections();
+        renderScreen();
+        return;
+      }
+      if (msg.type === "state" && msg.values && typeof msg.values === "object") {
+        applyState(msg.values);
+        return;
+      }
+      if (msg.type === "stats") {
+        updateStatsView(msg);
+        renderScreen();
+        return;
+      }
+      if (msg.type === "error") {
+        pushLog("FW ERROR " + (msg.message || "unknown"), true);
+      }
+    }
+
+    async function handleLine(line) {
+      if (!line) {
+        return;
+      }
+      rxCount += 1;
+      updateIoInfo();
+      pushLog("RX " + line);
+      try {
+        const msg = JSON.parse(line);
+        await handleJson(msg);
+      } catch {
+        pushLog("RX NON-JSON", true);
+      }
+    }
+
+    async function readLoop() {
+      readLoopRunning = true;
+      try {
+        while (readLoopRunning && reader) {
+          const { value, done } = await reader.read();
+          if (done) {
+            break;
+          }
+          rxText += decoder.decode(value, { stream: true });
+          let idx = rxText.indexOf("\n");
+          while (idx >= 0) {
+            const line = rxText.slice(0, idx).replace(/\r/g, "").trim();
+            rxText = rxText.slice(idx + 1);
+            await handleLine(line);
+            idx = rxText.indexOf("\n");
+          }
+        }
+      } catch (err) {
+        pushLog("READ ERROR " + err.message, true);
+      } finally {
+        readLoopRunning = false;
+      }
+    }
+
+    function startPolling() {
+      stopPolling();
+      pollTimer = setInterval(() => queueLine("PING"), 1500);
+      statsTimer = setInterval(() => queueLine("STATS"), 1000);
+    }
+
+    function stopPolling() {
+      if (pollTimer) {
+        clearInterval(pollTimer);
+        pollTimer = null;
+      }
+      if (statsTimer) {
+        clearInterval(statsTimer);
+        statsTimer = null;
+      }
+      if (flushTimer) {
+        clearTimeout(flushTimer);
+        flushTimer = null;
+      }
+    }
+
+    async function connect() {
+      if (connectInProgress) {
+        return;
+      }
+
+      connectInProgress = true;
+      setConnectedUi(false);
+      setStatus("Connecting...", false);
+      try {
+        if (transportMode === "emulator") {
+          await connectEmulator();
+          return;
+        }
+        if (!("serial" in navigator)) {
+          setStatus("Web Serial unsupported", false);
+          return;
+        }
+        port = await navigator.serial.requestPort();
+
+        let opened = false;
+        let lastErr = null;
+        for (let attempt = 0; attempt < 10 && !opened; ++attempt) {
+          try {
+            await port.open({ baudRate: 115200 });
+            opened = true;
+          } catch (err) {
+            lastErr = err;
+            await new Promise((resolve) => setTimeout(resolve, 250));
+          }
+        }
+        if (!opened) {
+          throw lastErr || new Error("Failed to open serial port");
+        }
+
+        setPortInfo();
+        writer = port.writable.getWriter();
+        reader = port.readable.getReader();
+        meta = LOCAL_SCHEMA;
+        rebuildParamIndex();
+        state = seedLocalDefaults();
+        renderPanelSections();
+        renderScreen();
+
+        setConnectedUi(true);
+        setStatus("Connected", true);
+        pushLog("CONNECTED", true);
+        startPolling();
+        readLoop().catch(() => {});
+        queueLine("PING");
+        queueLine("STATS");
+      } finally {
+        connectInProgress = false;
+        setConnectedUi(Boolean((transportMode === "emulator" && emulator && emulator.connected) || (port && writer && reader)));
+      }
+    }
+
+    async function disconnect() {
+      releaseAllHeldNotes();
+      stopPolling();
+      txQueue = [];
+      txBusy = false;
+      pending = {};
+      readLoopRunning = false;
+      if (emulator && emulator.connected) {
+        emulator.connected = false;
+      }
+      if (dspEngine) {
+        await dspEngine.stop();
+        dspEngine = null;
+      }
+
+      try {
+        if (reader) {
+          await reader.cancel();
+          reader.releaseLock();
+        }
+      } catch {}
+
+      try {
+        if (writer) {
+          writer.releaseLock();
+        }
+      } catch {}
+
+      try {
+        if (port) {
+          await port.close();
+        }
+      } catch {}
+
+      reader = null;
+      writer = null;
+      port = null;
+      rxText = "";
+
+      setConnectedUi(false);
+      setStatus(transportMode === "emulator" ? "Emulator Ready" : "Disconnected", false);
+      refreshTransportUi();
+      pushLog("DISCONNECTED", true);
+    }
+
+    function shouldIgnoreComputerKeyboardTarget(target) {
+      if (!target || !(target instanceof Element)) {
+        return false;
+      }
+      const tag = target.tagName;
+      return tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || tag === "BUTTON";
+    }
+
+    function onComputerKeyDown(ev) {
+      if (shouldIgnoreComputerKeyboardTarget(ev.target)) {
+        return;
+      }
+      const semitoneOffset = KEYBOARD_PC_MAP[ev.code];
+      if (semitoneOffset === undefined) {
+        return;
+      }
+      ev.preventDefault();
+      if (ev.repeat || keyboardCodeToNote.has(ev.code)) {
+        return;
+      }
+      const note = clampMidi7(keyboardStartNote() + semitoneOffset);
+      keyboardCodeToNote.set(ev.code, note);
+      noteAcquire(note, keyboardVelocity());
+    }
+
+    function onComputerKeyUp(ev) {
+      const note = keyboardCodeToNote.get(ev.code);
+      if (note === undefined) {
+        return;
+      }
+      ev.preventDefault();
+      keyboardCodeToNote.delete(ev.code);
+      noteRelease(note);
+    }
+
+    connectBtn.onclick = () => connect().catch((err) => {
+      setStatus("Connect failed", false);
+      pushLog("CONNECT ERROR " + err.message, true);
+      void disconnect();
+    });
+    disconnectBtn.onclick = () => void disconnect();
+    transportBtn.onclick = () => void setTransportMode(transportMode === "serial" ? "emulator" : "serial");
+    uiModeBtn.onclick = () => setUiMode(uiMode === "simple" ? "advanced" : "simple");
+    metaBtn.onclick = () => {
+      meta = LOCAL_SCHEMA;
+      rebuildParamIndex();
+      renderPanelSections();
+      renderScreen();
+    };
+    stateBtn.onclick = () => pushAllCurrentState();
+    statsBtn.onclick = () => queueLine("STATS");
+    kbPanicBtn.onclick = () => releaseAllHeldNotes();
+    kbStartOctEl.addEventListener("change", () => renderKeyboard());
+    kbVelocityEl.addEventListener("input", () => renderKeyboard());
+    kbChordModeEl.addEventListener("change", () => {
+      releaseAllHeldNotes();
+      renderKeyboard();
+    });
+    kbChordRootEl.addEventListener("change", () => {
+      releaseAllHeldNotes();
+      renderKeyboard();
+    });
+    kbChordOctEl.addEventListener("change", () => {
+      releaseAllHeldNotes();
+      renderKeyboard();
+    });
+    kbChordTypeEl.addEventListener("change", () => {
+      releaseAllHeldNotes();
+      renderKeyboard();
+    });
+
+    if ("serial" in navigator && navigator.serial.addEventListener) {
+      navigator.serial.addEventListener("disconnect", async () => {
+        if (port) {
+          pushLog("USB DEVICE DETACHED", true);
+          await disconnect();
+        }
+      });
+    }
+
+    window.addEventListener("keydown", onComputerKeyDown);
+    window.addEventListener("keyup", onComputerKeyUp);
+    window.addEventListener("resize", scheduleVisualizerDraw);
+    setUiMode("simple");
+    refreshTransportUi();
+    setConnectedUi(false);
+    setStatus(transportMode === "emulator" ? "Emulator Ready" : "Disconnected", false);
+    updateIoInfo();
+    renderKeyboard();
+    renderScreen();
+  </script>
+</body>
+</html>

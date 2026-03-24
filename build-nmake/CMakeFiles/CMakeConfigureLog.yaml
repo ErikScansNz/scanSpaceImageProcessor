@@ -1,0 +1,12 @@
+
+---
+events:
+  -
+    kind: "message-v1"
+    backtrace:
+      - "C:/Program Files/CMake/share/cmake-3.27/Modules/CMakeDetermineSystem.cmake:206 (message)"
+      - "CMakeLists.txt:24 (project)"
+    message: |
+      The target system is: PICO -  - cortex-m33
+      The host system is: Windows - 10.0.26100 - AMD64
+...

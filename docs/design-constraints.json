@@ -1,0 +1,66 @@
+{
+  "project": "pico2w-synth",
+  "revision": "phase1",
+  "mcu": {
+    "part": "RP2350",
+    "module": "Raspberry Pi Pico 2 W"
+  },
+  "power": {
+    "input": ["USB_5V"],
+    "rails": [
+      {"name": "VBUS_5V", "type": "input"},
+      {"name": "VCC_3V3", "type": "logic"}
+    ],
+    "topology": "on-module regulation",
+    "estimated_current_ma": {
+      "idle": 120,
+      "active_audio_wifi": 260
+    }
+  },
+  "interfaces": {
+    "midi": {
+      "usb": true,
+      "uart_in": {
+        "baud": 31250,
+        "rx_pin": "GP1",
+        "tx_pin": "GP0",
+        "isolation_required": true
+      }
+    },
+    "display": {
+      "type": "SSD1306_I2C_128x64",
+      "sda": "GP2",
+      "scl": "GP3",
+      "i2c_pullups_required": true
+    },
+    "audio": {
+      "phase1_backend": "PWM_STEREO",
+      "left_pin": "GP27",
+      "right_pin": "GP28",
+      "external_dac_phase": "future"
+    },
+    "controls": {
+      "encoders": 4,
+      "pots": 1,
+      "reserved_pots": 2,
+      "buttons": "encoder push + optional extras"
+    },
+    "wireless": {
+      "wifi_ap_mode": true,
+      "bluetooth_audio": "future_stub"
+    }
+  },
+  "pin_map": {
+    "enc1": {"a": "GP4", "b": "GP5", "sw": "GP6"},
+    "enc2": {"a": "GP7", "b": "GP8", "sw": "GP9"},
+    "enc3": {"a": "GP10", "b": "GP11", "sw": "GP12"},
+    "enc4": {"a": "GP13", "b": "GP14", "sw": "GP15"},
+    "pots": ["GP26"]
+  },
+  "firmware_constraints": {
+    "audio_callback_blocking_io": false,
+    "audio_callback_dynamic_alloc": false,
+    "parameter_conflict_rule": "last_write_wins_timestamped",
+    "legacy_repo_edit_policy": "reference_only"
+  }
+}
